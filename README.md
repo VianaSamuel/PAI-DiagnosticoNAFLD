@@ -29,11 +29,11 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 ## 1. Menu:
 
 ### 1.1 Leitura/Visualização de Imagens:
-- [ ] Leitura de imagens nos formatos:
-  - [ ] .mat
-  - [ ] PNG
-  - [ ] JPG
-- [ ] Suporte para qualquer resolução de imagem
+- [x] Leitura de imagens nos formatos:
+  - [x] .mat
+  - [x] PNG
+  - [x] JPG
+- [x] Suporte para qualquer resolução de imagem
 - [ ] Cálculo e exibição do histograma de tons de cinza
 
 ### 1.2 Recorte Regiões de Interesse (ROIs):
