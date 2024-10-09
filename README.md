@@ -26,38 +26,40 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 # Roadmap
 
-## 1. Menu:
+## 1. Menu/GUI:
 
-### 1.1 Leitura/Visualização de Imagens:
-- [x] Leitura de imagens nos formatos:
+### 1.1 Visualizar (Imagens + Histogramas):
+- [x] Botão de leitura de imagens com os seguintes formatos aceitos:
   - [x] .mat
   - [x] PNG
   - [x] JPG
 - [x] Suporte para qualquer resolução de imagem
 - [ ] Cálculo e exibição do histograma de tons de cinza
 
-### 1.2 Recorte Regiões de Interesse (ROIs):
-- [ ] Recorte de regiões de interesse em uma imagem
+### 1.2 Recortar (ROIs):
+- [x] Botão de recorte de regiões de interesse em uma imagem
 - [ ] Garantir que o usuário possa selecionar e salvar múltiplas ROIs
 
-### 1.3 Leitura/Visualização dos ROIs gerados:
-- [ ] Ler e visualizar as ROIs geradas
+### 1.3 Visualizar (ROIs Geradas + Histogramas):
+- [x] Botão de ler e visualizar as ROIs geradas
 - [ ] Calcular e exibir os respectivos histogramas para cada ROI
 
-### 1.4 Cálculo de Matrizes de Co-ocorrência (GLCM) de uma ROI:
-- [ ] Cálculo de matrizes de co-ocorrência (GLCM) de uma ROI
+### 1.4 Calcular (GLCM + Descritores de Textura) de uma ROI:
+- [x] Botão de cálculo de matrizes de co-ocorrência (GLCM) de uma ROI
 - [ ] Exibir valores dos descritores de textura da GLCM calculada
 
-### 1.5 Caracterizaçaõ de ROIs usando Descritor de Textura:
-- [ ] Caracterização de ROIs através do descritor de textura sorteado (Local Binary Pattern (LPB), energia e entropia com raios = 1, 2, 4, 8) e exibição de valores dos descritores calculados
+### 1.5 Caracterizar (ROIs Geradas) através de Descritor de Textura:
+- [x] Botão de caracterização de ROIs através do descritor de textura sorteado:<br>*(Local Binary Pattern (LPB), energia e entropia com raios = 1, 2, 4, 8)*
+- [ ] Exibir valores dos descritores calculados
 
-### 1.6 Classificação de Imagem:
-- [ ] Classificação de imagem através das técnica selecionada (Local Binary Pattern (LPB), energia e entropia com raios = 1, 2, 4, 8), indicando qual a classe encontrada
+### 1.6 Classificar (Imagem):
+- [x] Botão de classificação de imagem através da técnica selecionada
+- [ ] Exibir a indicação da classe encontrada
 
 <br>
 
 ## 2. Imagens
-- [ ] Ler e exibir imagens em tons de cinza
+- [x] Ler e exibir imagens em tons de cinza
 - [ ] Implementar zoom
 - [ ] Exibir histogramas correspondentes
 
