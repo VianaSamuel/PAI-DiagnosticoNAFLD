@@ -9,8 +9,8 @@
 # subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
 
 import matplotlib.pyplot as plt
-# import numpy as np
-# import os
+import numpy as np
+import os
 import scipy.io
 from PIL import Image
 import tkinter as tk
@@ -26,10 +26,9 @@ def carregar_imagens():
     vetor_caminhos_imagens = filedialog.askopenfilenames(title="Selecionar imagens", filetypes=[("Todos os arquivos", "*.mat;*.jpg;*.png")])
     
     # carregamento e processamento de cada imagem
-    vetor_imagens = [] # indice 0: imagens avulsas, indice 1 em diante: imagens de cada paciente. pacientes vao de 1 a 55
-    vetor_imagens.append([]) # imagens avulsas (indice 0)
-    salva_vetor_imagens(vetor_caminhos_imagens, vetor_imagens)
-    return vetor_imagens
+    vetor_pacientes = [[]] # indice 0: imagens avulsas, indice 1 em diante: imagens de cada paciente. pacientes vao de 1 a 55
+    salva_vetor_pacientes(vetor_caminhos=vetor_caminhos_imagens, vetor_pacientes=vetor_pacientes)
+    return vetor_pacientes
 
 
 #=(CARREGAMENTO - .mat)
@@ -46,33 +45,26 @@ def carrega_imagem_jpg_png(caminho):
     img_aberta = Image.open(caminho)
     if img_aberta.mode != 'L':  # se imagem estiver em RGB, converte para tons de cinza
         img_aberta = img_aberta.convert('L')
+    img_aberta = np.array(img_aberta, dtype=np.uint8).tolist()
     return img_aberta
 
-
-#=(EXIBIÇÃO)
-# VELHA, PROVAVELMENTE NÃO VAI SER USADA E TA ERRADA
-# def exibir_imagens(tupla_avulsas_pacientes, funcao_exibicao = janela_histograma):
-#     if tupla_avulsas_pacientes[0] != [] or tupla_avulsas_pacientes[1] != []:
-#         funcao_exibicao(tupla_avulsas_pacientes)
-#     else:
-#         messagebox.showwarning("Aviso", "Não foi adicionada nenhuma imagem.")
-
-
 #=(SALVAMENTO)
-def salva_vetor_imagens(vetor_caminhos, vetor_imagens):
+def salva_vetor_pacientes(vetor_caminhos, vetor_pacientes):
     for caminho in vetor_caminhos:
         # PACIENTES
         if caminho.lower().endswith('.mat'):
             array_mat = carrega_array_mat(caminho)
             for i, paciente in enumerate(array_mat[0]): # array_mat[0][paciente][imagem]
-                vetor_imagens.append(paciente)
+                vetor_pacientes.append(paciente)
                 for imagem in paciente:
-                    vetor_imagens[i+1].append(imagem)
+                    if isinstance(vetor_pacientes[i+1], np.ndarray):
+                        vetor_pacientes[i+1] = vetor_pacientes[i+1].tolist() # o paciente vem como ndarray por algum motivo. isso converte para lista
+                    vetor_pacientes[i+1].append(imagem)
 
         # IMAGENS AVULSAS
         elif caminho.lower().endswith(('.png', '.jpg')):
             imagem_avulsa = carrega_imagem_jpg_png(caminho)
-            vetor_imagens[0].append(imagem_avulsa)
+            vetor_pacientes[0].append(imagem_avulsa)
 #=============== FIM PROCESSAMENTO DE IMAGENS ===============#
 
 
@@ -81,66 +73,64 @@ def salva_vetor_imagens(vetor_caminhos, vetor_imagens):
 #=(CALCULO - histograma)
 def calculo_histograma(imagem):
     # iniciliza array do histograma com 256 valores de intensidade (0 a 255), todos com 0
-    histograma = [0 for intensidade in range(256)]
-    print(imagem.shape)
+    histograma = [0 for _ in range(256)]
 
     # percorre imagem pixel por pixel, contando a frequência de cada valor de intensidade
-    for x in range(imagem.shape[0]): # percorre as linhas (altura) da imagem
-        for y in range(imagem.shape[1]): # percorre as colunas (largura) da imagem
-            valor_intensidade_pixel = imagem[x, y]
+    for x in range(len(imagem)): # percorre as linhas (altura) da imagem
+        for y in range(len(imagem[x])): # percorre as colunas (largura) da imagem
+            valor_intensidade_pixel = imagem[x][y]
             histograma[valor_intensidade_pixel] += 1
+    histograma[0] = 0 # o fundo da imagem de ultrassom é preto. isso tira do histograma o pico do fundo, para normalizar a altura dos dados
     return histograma
 
-
-# #=(GERA IMAGEM - histograma)
-# # transforma o vetor do histograma em uma imagem 256x200
-# def gera_imagem_histograma(histograma, altura = 200):
-#     histograma_imagem = [[] for intensidade in range(256)] 
-#     for cor_count in histograma: # cor_count = numero de pixels daquela cor
-#         for y in range(altura):
-#             if y < cor_count: # preenche de preto até o número de ocorrências
-#                 histograma_imagem[cor_count].append(0)
-#             else:
-#                 histograma_imagem[cor_count].append(255)
-#     return histograma_imagem
 #=============== FIM HISTOGRAMA ===============#
 
 
 #=============== JANELAS DOS BOTÕES ===============#
 
-def janela_imagens_e_histogramas(vetor_imagens):
+def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
     def prepara_a_tela():
+        nonlocal idx_paciente
+        nonlocal idx_imagem
         # limpa o gráfico anterior
         imagem_histograma[0].cla()
         imagem_histograma[1].cla()
         # exibe a nova imagem e o histograma dela
-        janela_histograma_exibe_uma(vetor_imagens[idx_fonte][idx_imagem], titulo)
+        if(len(vetor_pacientes[idx_paciente]) > 0): # se tem alguma imagem para exibir
+            janela_histograma_exibe_uma(vetor_pacientes[idx_paciente][idx_imagem], titulo)
+        else:
+            print("Nenhuma imagem carregada para exibir.")
+            tk.messagebox.showerror("Erro", "Nenhuma imagem carregada para exibir.")
+            plt.close(figura)
+            return
         # atualiza a tela
         plt.draw()
-
+        
     def navegar_avancar(event):
-        nonlocal idx_fonte
+        nonlocal idx_paciente
         nonlocal idx_imagem
-        if idx_imagem < len(vetor_imagens[idx_fonte]) - 1: # se nao é a ultima imagem daquela fonte
+        if idx_imagem < len(vetor_pacientes[idx_paciente]) - 1: # se nao é a ultima imagem daquela fonte
             idx_imagem += 1
-        elif idx_fonte < len(vetor_imagens) - 1: # se nao é a ultima fonte
-            idx_imagem = 0
-            idx_fonte += 1
+        elif idx_paciente < len(vetor_pacientes) - 1: # se nao é a ultima fonte
+            if len(vetor_pacientes[idx_paciente+1]) != 0:
+                idx_imagem = 0
+                idx_paciente += 1
         prepara_a_tela()
     
     def navegar_retroceder(event):
-        nonlocal idx_fonte
+        nonlocal idx_paciente
         nonlocal idx_imagem
         if idx_imagem > 0:  # se não é a primeira imagem daquela fonte
             idx_imagem -= 1
-        elif idx_fonte > 0:  # se não é a primeira fonte
-            idx_fonte -= 1
-            idx_imagem = len(vetor_imagens[idx_fonte]) - 1
+        elif idx_paciente > 0:  # se não é a primeira fonte
+            if len(vetor_pacientes[idx_paciente-1]) != 0:
+                idx_paciente -= 1
+                idx_imagem = len(vetor_pacientes[idx_paciente]) - 1
         prepara_a_tela()
 
     def janela_histograma_exibe_uma(imagem, titulo=""):
         # exibe a imagem à esquerda
-        imagem_histograma[0].imshow(imagem)
+        imagem_histograma[0].imshow(imagem, cmap='gray')
         imagem_histograma[0].set_title(titulo)
         imagem_histograma[0].axis('off')
         # calcula o histograma
@@ -152,21 +142,33 @@ def janela_imagens_e_histogramas(vetor_imagens):
         imagem_histograma[1].set_xlabel('Intensidade')
         imagem_histograma[1].set_ylabel('Frequência')
 
-    idx_fonte = 0 # 0: avulsa, >=1: paciente
-    idx_imagem = 0 # id da imagem dentro do vetor da fonte dela
+    def on_key(event):
+        if event.key == 'right':
+            navegar_avancar(event)
+        elif event.key == 'left':
+            navegar_retroceder(event)
+
     titulo = ""
-    is_avulsa = True if idx_fonte == 0 else False
+    # idx_paciente - 0: avulsa, >=1: paciente
+    is_avulsa = True if idx_paciente == 0 else False
     if is_avulsa:
         titulo = f"Imagem Avulsa #{idx_imagem+1}"
     else:
-        titulo = f"Paciente #{idx_fonte} - Imagem #{idx_imagem+1}"
+        titulo = f"Paciente #{idx_paciente} - Imagem #{idx_imagem+1}"
 
     # cria a figura e os subplots
     figura, imagem_histograma = plt.subplots(1, 2, figsize=(10, 5))
 
-    # conecta os eventos de navegação com os botões do menu do matplotlib
-    figura.canvas.manager.toolbar.push_current = navegar_avancar
-    figura.canvas.manager.toolbar.back = navegar_retroceder
+    # conecta os eventos de botões do teclado. especificamente, navegação via setas
+    figura.canvas.mpl_connect('key_press_event', on_key)
+
+    # cria os botões. pode navegar via teclado ou os botões
+    localizacao_botao_avancar = plt.axes([0.7, 0.05, 0.1, 0.075])
+    localizacao_botao_retroceder = plt.axes([0.81, 0.05, 0.1, 0.075])
+    btn_prev = plt.Button(localizacao_botao_avancar, '<')
+    btn_next = plt.Button(localizacao_botao_retroceder, '>')
+    btn_prev.on_clicked(navegar_retroceder)
+    btn_next.on_clicked(navegar_avancar)
 
     prepara_a_tela()
 
@@ -176,6 +178,19 @@ def janela_imagens_e_histogramas(vetor_imagens):
 #=============== FIM JANELA DOS BOTÕES ===============#
 
 
+def prepara_ids(vetor_pacientes):
+    idx_paciente = -1,
+    idx_imagem = -1,
+    for i, paciente in enumerate(vetor_pacientes):
+        if len(paciente) != 0:
+            idx_paciente = i
+            idx_imagem = 0
+            break
+    if idx_paciente == -1:
+        print("Nenhuma imagem.")
+        tk.messagebox.showerror("Erro", "Nenhuma imagem.")
+        return
+    janela_imagens_e_histogramas(vetor_pacientes, idx_paciente, idx_imagem)
 
 #=============== GUI ===============#
 def menu_principal():
@@ -191,10 +206,10 @@ def menu_principal():
     menu_principal.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
     menu_principal.columnconfigure(0, weight=1)
 
-    vetor_imagens = carregar_imagens()
+    vetor_pacientes = carregar_imagens()
 
     # botões
-    btn0 = tk.Button(menu_principal, text="Visualizar (Imagens + Histogramas)", command=lambda: {janela_imagens_e_histogramas(vetor_imagens)}, width=50, height=2)
+    btn0 = tk.Button(menu_principal, text="Visualizar (Imagens + Histogramas)", command=lambda:{prepara_ids(vetor_pacientes=vetor_pacientes)}, width=50, height=2)
     btn0.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
 
     btn1 = tk.Button(menu_principal, text="Recortar (ROIs)", width=50, height=2)
