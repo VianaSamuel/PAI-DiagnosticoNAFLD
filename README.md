@@ -34,11 +34,11 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
   - [x] PNG
   - [x] JPG
 - [x] Suporte para qualquer resolução de imagem
-- [ ] Cálculo e exibição do histograma de tons de cinza
+- [x] Cálculo e exibição do histograma de tons de cinza
 
 ### 1.2 Recortar (ROIs):
 - [x] Botão de recorte de regiões de interesse em uma imagem
-- [ ] Garantir que o usuário possa selecionar e salvar múltiplas ROIs
+- [x] Garantir que o usuário possa selecionar e salvar múltiplas ROIs
 
 ### 1.3 Visualizar (ROIs Geradas + Histogramas):
 - [x] Botão de ler e visualizar as ROIs geradas
@@ -60,8 +60,8 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 ## 2. Imagens
 - [x] Ler e exibir imagens em tons de cinza
-- [ ] Implementar zoom
-- [ ] Exibir histogramas correspondentes
+- [x] Implementar zoom
+- [x] Exibir histogramas correspondentes
 
 <br>
 
@@ -73,13 +73,13 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 <br>
 
 ## 4. Geração de ROIs
-- [ ] Recorte de 2 ROIs de 28x28 pixels
-  - [ ] Região do Fígado
-  - [ ] Região do Córtex Renal
-- [ ] Quadrado (em cor verde) definido com o mouse 
+- [x] Recorte de 2 ROIs de 28x28 pixels
+  - [x] Região do Fígado
+  - [x] Região do Córtex Renal
+- [x] Quadrado (em cor verde) definido com o mouse 
 - [ ] Cálculo do índice hepatorenal:<br>*(HI) = (média_tons_cinza_ROI_fígado / média_tons_cinza_ROI_rim)*
 - [ ] Ajuste de tons de cinza da ROI do fígado, multiplicando cada valor de tom de cinza por (HI) e arredondando-os
-- [ ] Salvar somente a ROI do fígado em um diretório, o nome deve ser no formato **"ROI_nn_m"**<br>*(nn = número do paciente (0 a 54), m = número da imagem de ultrassom (0 a 9))*
+- [x] Salvar somente a ROI do fígado em um diretório, o nome deve ser no formato **"ROI_nn_m"**<br>*(nn = número do paciente (0 a 54), m = número da imagem de ultrassom (0 a 9))*
 - Observações:
   - Ver como localizar as regiões na seção de Materiais e Métodos do artigo (Figura 2);
   - A ROI do rim servirá como referência para a normalização da ROI do fígado, reduzindo diferenças entre imagens adquiridas com equipamentos distintos ou a influência de artefactos.
