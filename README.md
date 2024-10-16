@@ -42,7 +42,7 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 ### 1.3 Visualizar (ROIs Geradas + Histogramas):
 - [x] Botão de ler e visualizar as ROIs geradas
-- [ ] Calcular e exibir os respectivos histogramas para cada ROI
+- [x] Calcular e exibir os respectivos histogramas para cada ROI
 
 ### 1.4 Calcular (GLCM + Descritores de Textura) de uma ROI:
 - [x] Botão de cálculo de matrizes de co-ocorrência (GLCM) de uma ROI
@@ -66,9 +66,9 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 <br>
 
 ## 3. ROIs
-- [ ] Ler e exibir ROIs
-- [ ] Implementar zoom
-- [ ] Exibir histogramas correspondentes
+- [x] Ler e exibir ROIs
+- [x] Implementar zoom
+- [x] Exibir histogramas correspondentes
 
 <br>
 
