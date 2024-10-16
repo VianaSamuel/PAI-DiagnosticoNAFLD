@@ -2,11 +2,11 @@
 # Samuel Luiz da Cunha Viana Cruz (762496)
 
 # instalando bibliotecas necessárias
-# import subprocess
-# import sys
-# subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
-# subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
-# subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
+import subprocess
+import sys
+subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -67,7 +67,35 @@ def salva_vetor_pacientes(vetor_caminhos, vetor_pacientes):
         elif caminho.lower().endswith(('.png', '.jpg')):
             imagem_avulsa = carrega_imagem_jpg_png(caminho)
             vetor_pacientes[0].append(imagem_avulsa)
+
+# carrega as imagens já preparadas das rois que foram salvas automaticamente na pasta delimitada e retorna 
+# uma tupla com o vetor das imagens e caminhos das rois
+def carrega_rois():
+    vetor_rois = []
+    diretorio = os.listdir('rois')
+    for nome_arquivo_imagem in diretorio: # os.listdir é diferente do filedialog.askopenfilenames. ele retorna apenas o nome do arquivo, que tem que ser concatenado com o diretório
+        if nome_arquivo_imagem.endswith(('.png', '.jpg')):
+            vetor_rois.append((carrega_imagem_jpg_png(os.path.join('rois', nome_arquivo_imagem)), nome_arquivo_imagem))
+    return vetor_rois
 #=============== FIM PROCESSAMENTO DE IMAGENS ===============#
+
+
+
+#=============== FUNÇÕES AUXILIARES ===============#
+# seleciona o primeiro paciente e imagem e chama a função da janela recebida como parâmetro
+def prepara_ids(vetor_pacientes, funcao):
+    idx_paciente = -1,
+    idx_imagem = -1,
+    for i, paciente in enumerate(vetor_pacientes):
+        if len(paciente) != 0:
+            idx_paciente = i
+            idx_imagem = 0
+            break
+    if idx_paciente == -1:
+        tk.messagebox.showerror("Erro", "Nenhuma imagem.")
+        return
+    funcao(vetor_pacientes, idx_paciente, idx_imagem)
+#=============== FIM FUNÇÕES AUXILIARES ===============#
 
 
 
@@ -82,29 +110,21 @@ def calculo_histograma(imagem):
         for y in range(len(imagem[x])): # percorre as colunas (largura) da imagem
             valor_intensidade_pixel = imagem[x][y]
             histograma[valor_intensidade_pixel] += 1
-    histograma[0] = 0 # o fundo da imagem de ultrassom é preto. isso tira do histograma o pico do fundo, para normalizar a altura dos dados
     return histograma
-
-
-#=(AUXILIAR - prepara id's)
-# seleciona o primeiro paciente e imagem e chama a função da janela recebida como parametro
-def prepara_ids(vetor_pacientes, funcao):
-    idx_paciente = -1,
-    idx_imagem = -1,
-    for i, paciente in enumerate(vetor_pacientes):
-        if len(paciente) != 0:
-            idx_paciente = i
-            idx_imagem = 0
-            break
-    if idx_paciente == -1:
-        tk.messagebox.showerror("Erro", "Nenhuma imagem.")
-        return
-    funcao(vetor_pacientes, idx_paciente, idx_imagem)
 #=============== FIM CÁLCULO DO HISTOGRAMA ===============#
 
 
 
-#=============== JANELA - BOTÃO 1 (imagens + histograma) ===============#
+#=============== CÁLCULO DO ÍNDICE HEPATORENAL ===============#
+def calculo_hi(media_tons_cinza_roi_figado, media_tons_cinza_roi_rim):
+    return media_tons_cinza_roi_figado / media_tons_cinza_roi_rim
+
+# TODO:  Ajuste de tons de cinza da ROI do fígado, multiplicando cada valor de tom de cinza por (HI) e arredondando-os
+#=============== FIM CÁLCULO DO ÍNDICE HEPATORENAL ===============#
+
+
+
+#=============== JANELA - BOTÃO 1 (imagens + histogramas) ===============#
 def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1, titulo = ""):
     def prepara_a_tela():
         nonlocal idx_paciente
@@ -156,6 +176,7 @@ def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1
         imagem_histograma[0].axis('off')
         # calcula o histograma
         histograma = calculo_histograma(imagem)
+        histograma[0] = 0 # o fundo da imagem de ultrassom é preto. isso tira do histograma o pico do fundo, para normalizar a altura dos dados
         # exibe o histograma à direita
         imagem_histograma[1].plot(histograma, color='black')
         imagem_histograma[1].set_title('Histograma')
@@ -229,7 +250,7 @@ def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1
     # insere a figura na tela
     plt.tight_layout()
     plt.show()
-#=============== FIM JANELA - BOTÃO 1 (imagens + histograma) ===============#
+#=============== FIM JANELA - BOTÃO 1 (imagens + histogramas) ===============#
 
 
 
@@ -248,15 +269,30 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
         global roi_figado, roi_rim, retangulo_figado, retangulo_rim
         if roi_atual and evento.inaxes == ax:
             imagem = vetor_pacientes[idx_paciente][idx_imagem]
-            altura_imagem = len(imagem[0])
-            largura_imagem = len(imagem)
+            altura_imagem = len(imagem)
+            largura_imagem = len(imagem[0])
+            largura = 28
 
             # calcula as coordenadas do clique na imagem em relação à posição do clique na tela
             x_img = int(evento.xdata)
             y_img = int(evento.ydata)
+            # corrige se a roi estiver fora da imagem
+            x_img = max(0, min(x_img, largura_imagem - largura))
+            y_img = max(0, min(y_img, altura_imagem - largura))
+            
+            # salva as coordenadas da roi // ISSO É SALVO NA SELEÇÃO DA ROI E NÃO AO SALVAR A ROI
 
-            largura = 28
-
+            # cria o arquivo e pasta se não existir
+            if not os.path.exists('rois'):
+                os.makedirs('rois')
+            # if not os.path.exists('rois/coords.txt'):
+            #     with open('rois/coords.txt', 'w') as arquivo_coordenadas:
+            #         arquivo_coordenadas.write(f'{idx_paciente},{idx_imagem},{x_img},{y_img}\n')
+            #         arquivo_coordenadas.close()
+            with open('rois/coords.txt', 'w') as arquivo_coordenadas:
+                arquivo_coordenadas.write(f'{idx_paciente},{idx_imagem},{x_img},{y_img}\n')
+                arquivo_coordenadas.close()
+            
             if roi_atual == 'figado':
                 roi_figado = [x_img, y_img, min(x_img + largura, largura_imagem), min(y_img + largura, altura_imagem)]
                 if retangulo_figado:
@@ -326,7 +362,10 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
     def exibe_figura():
         global retangulo_figado, retangulo_rim, roi_figado, roi_rim
         ax.clear()
-        ax.imshow(vetor_pacientes[idx_paciente][idx_imagem], cmap='gray')
+        imagem = vetor_pacientes[idx_paciente][idx_imagem]
+        altura = len(imagem)
+        largura = len(imagem[0])
+        ax.imshow(imagem, cmap='gray', extent=[0, largura, altura, 0])
         titulo = f"Selecionar ROIs - Paciente {idx_paciente}, Imagem {idx_imagem+1}"
         ax.set_title(titulo)
         retangulo_figado = None # reseta as rois
@@ -364,6 +403,126 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
     plt.show()
 #=============== FIM JANELA - BOTÃO 2 (recorte de rois) ===============#
 
+#=============== JANELA - BOTÃO 3 (rois + histogramas) ===============#
+
+def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titulo = ""):
+    def prepara_a_tela():
+        nonlocal roi_atual
+        nonlocal idx_roi
+        nonlocal titulo
+        # limpa o gráfico anterior
+        imagem_histograma[0].cla()
+        imagem_histograma[1].cla()
+        # exibe a nova imagem e o histograma dela
+        if(len(vetor_rois) > 0): # se tem alguma imagem para exibir
+            roi_atual = vetor_rois[idx_roi]
+            janela_rois_exibe_uma()
+        else:
+            tk.messagebox.showerror("Erro", "Nenhuma imagem.")
+            plt.close(figura)
+            return
+        # atualiza a tela
+        plt.draw()
+        
+    def navegar_avancar(event):
+        nonlocal idx_roi
+        if idx_roi < len(vetor_rois) - 1: # se nao é a ultima roi
+            idx_roi += 1
+        prepara_a_tela()
+    
+    def navegar_retroceder(event):
+        nonlocal idx_roi
+        if idx_roi > 0:  # se não é a primeira roi
+            idx_roi -= 1
+        prepara_a_tela()
+
+    def janela_rois_exibe_uma():
+        nonlocal roi_atual
+        imagem_roi = roi_atual[0]
+        nome_arquivo_roi = roi_atual[1]
+        # exibe a imagem à esquerda
+        imagem_histograma[0].imshow(imagem_roi, cmap='gray')
+        imagem_histograma[0].set_title(nome_arquivo_roi)
+        imagem_histograma[0].axis('off')
+        # calcula o histograma
+        histograma = calculo_histograma(imagem_roi)
+        # exibe o histograma à direita
+        imagem_histograma[1].plot(histograma, color='black')
+        imagem_histograma[1].set_title('Histograma')
+        imagem_histograma[1].set_xlim([0, 255])
+        imagem_histograma[1].set_xlabel('Intensidade')
+        imagem_histograma[1].set_ylabel('Frequência')
+
+    def on_key(event): # trocar de imagem via setas do teclado
+        if event.key == 'right':
+            navegar_avancar(event)
+        elif event.key == 'left':
+            navegar_retroceder(event)
+        elif event.key == 'r':  # reseta o zoom da imagem
+            reseta_zoom(None)
+
+    # define a nova imagem a ser exibida quando o usuario marca a regiao para zoom
+    def aplica_zoom(evento_clicar, evento_soltar):
+        # coordenadas do clique e do soltar
+        x1, y1 = evento_clicar.xdata, evento_clicar.ydata
+        x2, y2 = evento_soltar.xdata, evento_soltar.ydata
+        # novos limites da imagem a ser exibida
+        imagem_histograma[0].set_xlim(min(x1, x2), max(x1, x2))
+        imagem_histograma[0].set_ylim(max(y1, y2), min(y1, y2))
+        # atualiza
+        figura.canvas.draw_idle()
+    
+    def reseta_zoom(event):
+        # volta os limites da imagem para a imagem inteira
+        imagem_histograma[0].set_xlim(0, imagem_histograma[0].get_images()[0].get_array().shape[1])
+        imagem_histograma[0].set_ylim(imagem_histograma[0].get_images()[0].get_array().shape[0], 0)
+        # atualiza
+        figura.canvas.draw_idle()
+
+    # # idx_paciente - 0: avulsa, >=1: paciente
+    # is_avulsa = True if idx_paciente == 0 else False
+    # if is_avulsa:
+    #     titulo = f"Imagem Avulsa #{idx_imagem+1}"
+    # else:
+    #     titulo = f"Paciente #{idx_paciente} - Imagem #{idx_imagem+1}"
+
+    # cria a figura e os subplots
+    figura, imagem_histograma = plt.subplots(1, 2, figsize=(10, 5)) 
+
+    # conecta os eventos de botões do teclado. especificamente, navegação via setas
+    figura.canvas.mpl_connect('key_press_event', on_key)
+    figura.canvas.manager.set_window_title("ROI + Histograma")
+
+    # cria os botões. pode navegar via teclado ou os botões
+    localizacao_botao_avancar = plt.axes([0.2, 0.04, 0.1, 0.075])
+    localizacao_botao_retroceder = plt.axes([0.1, 0.04, 0.1, 0.075])
+    botao_avancar = plt.Button(localizacao_botao_avancar, '>')
+    botao_retroceder = plt.Button(localizacao_botao_retroceder, '<')
+    botao_avancar.on_clicked(navegar_avancar)
+    botao_retroceder.on_clicked(navegar_retroceder)
+    localizacao_botao_reseta = plt.axes([0.35, 0.04, 0.1, 0.075])
+    botao_reseta = Button(localizacao_botao_reseta, 'Resetar Zoom')
+    botao_reseta.on_clicked(reseta_zoom)
+
+    vetor_rois = carrega_rois()
+    prepara_a_tela()
+
+    # criação do seletor para zoom
+    seletor = RectangleSelector(imagem_histograma[0], aplica_zoom,
+                                useblit=True,
+                                button=[1, 3],  # 1: esquerdo, 3: direito
+                                minspanx=5, minspany=5,
+                                spancoords='pixels',
+                                interactive=True,
+                                props=dict(facecolor='none', edgecolor='red', alpha=1.0, fill=False)) # deixa o retângulo transparente
+    seletor.set_active(True)
+
+    # insere a figura na tela
+    plt.tight_layout()
+    plt.show()
+
+#=============== FIM JANELA - BOTÃO 3 (rois + histogramas) ===============#
+
 
 
 #=============== GUI ===============#
@@ -387,7 +546,7 @@ def menu_principal():
     btn0.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
     btn1 = tk.Button(menu_principal, text="Recortar (ROIs)", command=lambda:{prepara_ids(vetor_pacientes=vetor_pacientes, funcao=janela_selecionar_rois)}, width=50, height=2)
     btn1.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
-    btn2 = tk.Button(menu_principal, text="Visualizar (ROIs Geradas + Histogramas)", width=50, height=2)
+    btn2 = tk.Button(menu_principal, text="Visualizar (ROIs Geradas + Histogramas)", command=janela_rois_e_histogramas, width=50, height=2)
     btn2.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
     btn3 = tk.Button(menu_principal, text="Calcular (GLCM + Descritores de Textura) de uma ROI", width=50, height=2)
     btn3.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
