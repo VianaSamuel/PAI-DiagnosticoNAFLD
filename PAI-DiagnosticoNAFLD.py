@@ -281,14 +281,8 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
             y_img = max(0, min(y_img, altura_imagem - largura))
             
             # salva as coordenadas da roi // ISSO É SALVO NA SELEÇÃO DA ROI E NÃO AO SALVAR A ROI
-
-            # cria o arquivo e pasta se não existir
-            if not os.path.exists('rois'):
+            if not os.path.exists('rois'): # cria o arquivo e pasta se não existir
                 os.makedirs('rois')
-            # if not os.path.exists('rois/coords.txt'):
-            #     with open('rois/coords.txt', 'w') as arquivo_coordenadas:
-            #         arquivo_coordenadas.write(f'{idx_paciente},{idx_imagem},{x_img},{y_img}\n')
-            #         arquivo_coordenadas.close()
             with open('rois/coords.txt', 'w') as arquivo_coordenadas:
                 arquivo_coordenadas.write(f'{idx_paciente},{idx_imagem},{x_img},{y_img}\n')
                 arquivo_coordenadas.close()
