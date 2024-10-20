@@ -2,11 +2,11 @@
 # Samuel Luiz da Cunha Viana Cruz (762496)
 
 # instalando bibliotecas necessárias
-import subprocess
-import sys
-subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
+# import subprocess
+# import sys
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -94,7 +94,8 @@ def prepara_ids(vetor_pacientes, funcao):
     if idx_paciente == -1:
         tk.messagebox.showerror("Erro", "Nenhuma imagem.")
         return
-    funcao(vetor_pacientes, idx_paciente, idx_imagem)
+    if funcao:
+        funcao(vetor_pacientes, idx_paciente, idx_imagem)
 #=============== FIM FUNÇÕES AUXILIARES ===============#
 
 
@@ -111,15 +112,46 @@ def calculo_histograma(imagem):
             valor_intensidade_pixel = imagem[x][y]
             histograma[valor_intensidade_pixel] += 1
     return histograma
+
+#=(CALCULO - média do histograma)
+def media_histograma(histograma, imagem):
+    if not imagem:
+        return -1
+    altura = len(imagem)
+    largura = len(imagem[0])
+    soma = 0
+    numero_pixels = altura * largura
+    for i in range(256):
+        soma += histograma[i] * i
+    return soma / numero_pixels
 #=============== FIM CÁLCULO DO HISTOGRAMA ===============#
 
 
 
 #=============== CÁLCULO DO ÍNDICE HEPATORENAL ===============#
-def calculo_hi(media_tons_cinza_roi_figado, media_tons_cinza_roi_rim):
+#=(CALCULO - hi)
+def calculo_hi(roi_figado_img, roi_rim_img):
+    histograma_figado = calculo_histograma(roi_figado_img)
+    histograma_rim = calculo_histograma(roi_rim_img)
+    media_tons_cinza_roi_figado = media_histograma(histograma_figado, roi_figado_img)
+    print(f"media de tons de cinza figado: {media_tons_cinza_roi_figado}")
+    media_tons_cinza_roi_rim = media_histograma(histograma_rim, roi_rim_img)
+    print(f"media de tons de cinza rim: {media_tons_cinza_roi_rim}")
+    # print(f"HI: {media_tons_cinza_roi_figado / media_tons_cinza_roi_rim}")
+    if media_tons_cinza_roi_rim == 0:
+        media_tons_cinza_roi_rim = 0.0000000001 # para não ter divisão por 0
     return media_tons_cinza_roi_figado / media_tons_cinza_roi_rim
 
-# TODO:  Ajuste de tons de cinza da ROI do fígado, multiplicando cada valor de tom de cinza por (HI) e arredondando-os
+#=(AJUSTE - tons de cinza da roi do fígado)
+def ajusta_roi(roi_figado, hi):
+    roi_figado_ajustada = roi_figado
+    for x in range(len(roi_figado)):
+        for y in range(len(roi_figado[x])):
+            pixel_ajustado = round(roi_figado_ajustada[x][y] * hi) # multiplica cada valor de tom de cinza por HI e arredonda
+            if pixel_ajustado > 255:
+                pixel_ajustado = 255
+            roi_figado_ajustada[x][y] = pixel_ajustado
+    return roi_figado_ajustada
 #=============== FIM CÁLCULO DO ÍNDICE HEPATORENAL ===============#
 
 
@@ -256,7 +288,9 @@ def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1
 
 #=============== JANELA - BOTÃO 2 (recorte de rois) ===============#
 def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
-    global roi_figado, roi_rim, roi_atual, retangulo_figado, retangulo_rim
+    # estrutura da roi: [xmin, ymin, xmax, ymax]
+    global roi_figado, roi_rim, roi_atual, retangulo_figado, retangulo_rim, texto_hi, hi
+    texto_hi = ""
     ax = None
     figura = None
     roi_figado = None
@@ -264,9 +298,10 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
     roi_atual = None
     retangulo_figado = None
     retangulo_rim = None
+    hi = -1
 
     def evento_selecionar_roi(evento):
-        global roi_figado, roi_rim, retangulo_figado, retangulo_rim
+        global roi_figado, roi_rim, retangulo_figado, retangulo_rim, texto_hi, hi
         if roi_atual and evento.inaxes == ax:
             imagem = vetor_pacientes[idx_paciente][idx_imagem]
             altura_imagem = len(imagem)
@@ -287,6 +322,7 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
                 arquivo_coordenadas.write(f'{idx_paciente},{idx_imagem},{x_img},{y_img}\n')
                 arquivo_coordenadas.close()
             
+            # roi_figado é [xmin, ymin, xmax, ymax]
             if roi_atual == 'figado':
                 roi_figado = [x_img, y_img, min(x_img + largura, largura_imagem), min(y_img + largura, altura_imagem)]
                 if retangulo_figado:
@@ -300,6 +336,26 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
                 retangulo_rim = plt.Rectangle((x_img, y_img), largura, largura, fill=False, edgecolor='green', linewidth=2)
                 ax.add_patch(retangulo_rim)
 
+            # plotagem da média do histograma e cálculo do índice hepatorenal (HI)
+            if roi_figado and roi_rim:
+                # extrai as regiões de interesse. roi é [xmin, ymin, xmax, ymax] (coordenadas)
+                xmin_figado, ymin_figado, xmax_figado, ymax_figado = roi_figado[0], roi_figado[1], roi_figado[2], roi_figado[3] 
+                xmin_rim, ymin_rim, xmax_rim, ymax_rim = roi_rim[0], roi_rim[1], roi_rim[2], roi_rim[3]
+                # faz o split da matriz, selecionando apenas as partes dentro dos limites especificados
+                roi_figado_img = [linha[xmin_figado:xmax_figado] for linha in imagem[ymin_figado:ymax_figado]]
+                roi_rim_img = [linha[xmin_rim:xmax_rim] for linha in imagem[ymin_rim:ymax_rim]]
+                hi = calculo_hi(roi_figado_img, roi_rim_img)
+                texto_hi = f'Índice Hepatorrenal:\n{hi:.2f}'
+            else:
+                texto_hi = ""
+            
+            if len(ax.texts) > 0:
+                # se o objeto do texto existir, só renomeia
+                ax.texts[0].set_text(texto_hi)
+            else:
+                # adiciona o texto a tela
+                ax.text(0.4, -0.1, texto_hi, horizontalalignment='center', verticalalignment='top', transform=ax.transAxes, fontsize=12)
+
             figura.canvas.draw()
 
 
@@ -312,6 +368,7 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
         roi_atual = 'rim'
 
     def salvar_rois(event):
+        global hi
         if roi_figado == None:
             tk.messagebox.showwarning("Aviso", "Selecione a ROI do fígado.")
             return
@@ -325,7 +382,9 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
         idx_paciente_corrigido = idx_paciente - 1 # correção para index começando em 0
         idx_paciente_formatado = f"{idx_paciente_corrigido:02}" # formatação com 2 dígitos
         # salva as rois
-        roi_figado_imagem = Image.fromarray(imagem[roi_figado[1]:roi_figado[3], roi_figado[0]:roi_figado[2]])
+        roi_figado_cortada = imagem[roi_figado[1]:roi_figado[3], roi_figado[0]:roi_figado[2]]
+        roi_figado_cortada = ajusta_roi(roi_figado_cortada, hi)
+        roi_figado_imagem = Image.fromarray(roi_figado_cortada)
         roi_figado_imagem.save(f'rois/ROI_{idx_paciente_formatado}_{idx_imagem}.png')
         # roi_rim_imagem = Image.fromarray(imagem[roi_rim[1]:roi_rim[3], roi_rim[0]:roi_rim[2]])
         # roi_rim_imagem.save(f'rois/ROI_{idx_paciente_formatado}_{idx_imagem}.png')
@@ -354,7 +413,7 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
 
     # atualiza a e imagem e os retangulos das rois quando troca de imagem
     def exibe_figura():
-        global retangulo_figado, retangulo_rim, roi_figado, roi_rim
+        global retangulo_figado, retangulo_rim, roi_figado, roi_rim, texto_hi
         ax.clear()
         imagem = vetor_pacientes[idx_paciente][idx_imagem]
         altura = len(imagem)
@@ -397,8 +456,9 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
     plt.show()
 #=============== FIM JANELA - BOTÃO 2 (recorte de rois) ===============#
 
-#=============== JANELA - BOTÃO 3 (rois + histogramas) ===============#
 
+
+#=============== JANELA - BOTÃO 3 (rois + histogramas) ===============#
 def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titulo = ""):
     def prepara_a_tela():
         nonlocal roi_atual
@@ -473,13 +533,6 @@ def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titul
         # atualiza
         figura.canvas.draw_idle()
 
-    # # idx_paciente - 0: avulsa, >=1: paciente
-    # is_avulsa = True if idx_paciente == 0 else False
-    # if is_avulsa:
-    #     titulo = f"Imagem Avulsa #{idx_imagem+1}"
-    # else:
-    #     titulo = f"Paciente #{idx_paciente} - Imagem #{idx_imagem+1}"
-
     # cria a figura e os subplots
     figura, imagem_histograma = plt.subplots(1, 2, figsize=(10, 5)) 
 
@@ -514,7 +567,6 @@ def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titul
     # insere a figura na tela
     plt.tight_layout()
     plt.show()
-
 #=============== FIM JANELA - BOTÃO 3 (rois + histogramas) ===============#
 
 

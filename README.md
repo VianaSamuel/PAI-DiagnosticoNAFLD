@@ -77,8 +77,8 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
   - [x] Região do Fígado
   - [x] Região do Córtex Renal
 - [x] Quadrado (em cor verde) definido com o mouse 
-- [ ] Cálculo do índice hepatorenal:<br>*(HI) = (média_tons_cinza_ROI_fígado / média_tons_cinza_ROI_rim)*
-- [ ] Ajuste de tons de cinza da ROI do fígado, multiplicando cada valor de tom de cinza por (HI) e arredondando-os
+- [x] Cálculo do índice hepatorenal:<br>*(HI) = (média_tons_cinza_ROI_fígado / média_tons_cinza_ROI_rim)*
+- [x] Ajuste de tons de cinza da ROI do fígado, multiplicando cada valor de tom de cinza por (HI) e arredondando-os
 - [x] Salvar somente a ROI do fígado em um diretório, o nome deve ser no formato **"ROI_nn_m"**<br>*(nn = número do paciente (0 a 54), m = número da imagem de ultrassom (0 a 9))*
 - Observações:
   - Ver como localizar as regiões na seção de Materiais e Métodos do artigo (Figura 2);
