@@ -72,7 +72,7 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 <br>
 
-## 4. Geração de ROIs
+## 4. Recorte de ROIs
 - [x] Recorte de 2 ROIs de 28x28 pixels
   - [x] Região do Fígado
   - [x] Região do Córtex Renal
@@ -86,13 +86,13 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 <br>
 
-## 5. Geração de ROIs para o Dataset
+## 5. Planilha: ROIs para o Dataset
 - [ ] Gerar 550 ROIs seguindo o item anterior
-- [ ] Armazenar em CSV:
-  - [ ] Nome do arquivo
-  - [ ] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
-  - [ ] Canto superior esquerdo (fígado e rim)
-  - [ ] Valor do (HI)
+- [x] Armazenar em CSV:
+  - [x] Nome do arquivo
+  - [x] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
+  - [x] Canto superior esquerdo (fígado e rim)
+  - [x] Valor do (HI)
 
 <br>
 
@@ -103,3 +103,16 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 ## 7. Descritores de Haralick
 - [ ] Calcular Entropia e Homogeneidade (Haralick) para cada GLCM Radial do item anterior<br>(4 * 2 características) para cada ROI
+
+<br>
+
+## 8. Local Binary Pattern (LPB)
+- [ ] Calcular Local Binary Pattern (LPB): energia e entropia com raios = 1, 2, 4, 8
+
+<br>
+
+## 9. Planilha: Características calculadas para uso no classificador
+- [ ] Armazenar em CSV:
+  - [ ] Nome do arquivo
+  - [ ] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
+  - [ ] Características calculadas

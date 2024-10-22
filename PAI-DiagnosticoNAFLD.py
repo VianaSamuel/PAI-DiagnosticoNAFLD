@@ -11,6 +11,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import csv
 import scipy.io
 from PIL import Image
 import tkinter as tk
@@ -24,7 +25,7 @@ from matplotlib.widgets import Button, RectangleSelector
 # retorna uma tupla que contém um vetor de imagens soltas e um vetor de imagens de cada paciente para uso na função exibir_imagens
 def carregar_imagens():
     # salva os caminhos das imagens a serem carregadas
-    vetor_caminhos_imagens = filedialog.askopenfilenames(title="Selecionar imagens", filetypes=[("Todos os arquivos", "*.mat;*.jpg;*.png")])
+    vetor_caminhos_imagens = filedialog.askopenfilenames(title="Selecionar imagens", filetypes=[("Imagens ou Dataset", "*.mat;*.jpg;*.png")])
     
     # carregamento e processamento de cada imagem
     vetor_pacientes = [[]] # indice 0: imagens avulsas, indice 1 em diante: imagens de cada paciente. pacientes vao de 1 a 55
@@ -153,6 +154,76 @@ def ajusta_roi(roi_figado, hi):
             roi_figado_ajustada[x][y] = pixel_ajustado
     return roi_figado_ajustada
 #=============== FIM CÁLCULO DO ÍNDICE HEPATORENAL ===============#
+
+
+
+#=============== CÁLCULO DE ÍNDICE HEPATORENAL ===============#
+
+def calcula_matriz_ci(imagem, deltax, deltay):
+    matriz_ci = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz de coocorrência, toda com 0
+    for linha, y in enumerate(imagem):
+        for _, x in enumerate(linha):
+            if y+deltay < len(imagem) and x+deltax < len(linha):
+                cor1 = imagem[y][x]
+                cor2 = imagem[y+deltax][x+deltay]
+                matriz_ci[cor1][cor2] += 1
+    return matriz_ci
+
+#=============== DATASET ROIS EM .CSV ===============#
+def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valor_hi):
+    # tratamento de erro se não tiver algum dos dados
+    if not nome_arquivo or not roi_figado or not roi_rim or valor_hi == -1:
+        tk.messagebox.showerror("Erro", f"Erro: dados inconsistentes.\nnome_arquivo: {nome_arquivo}\nidx_paciente: {idx_paciente}\nroi_figado: {roi_figado}\nroi_rim: {roi_rim}\nvalor_hi: {valor_hi}")  
+        return
+    
+    # configura nome do arquivo e verifica se o mesmo já existe
+    arquivo_csv = "dataset_rois.csv"
+    existe_arquivo = os.path.isfile(arquivo_csv)
+    dados_csv = []
+
+    # se arquivo não existe, cria o cabeçalho
+    if not existe_arquivo:
+        dados_csv.append(["nome_arquivo", "classe", "canto_superior_esquerdo_figado", "canto_superior_esquerdo_rim", "valor_hi"])
+
+    # se arquivo existe, carrega dados existentes
+    if existe_arquivo:
+        with open(arquivo_csv, mode='r', newline='') as arquivo:
+            leitor_csv = csv.reader(arquivo)
+            dados_csv = list(leitor_csv)
+
+    # cantos superiores esquerdos dos rois: formato [xmin, ymin, xmax, ymax]
+    x_figado = roi_figado[0]
+    y_figado = roi_figado[1]
+    x_rim = roi_rim[0]
+    y_rim = roi_rim[1]
+    # figado_sup_esq = f"{x_figado}, {y_figado}"
+    # rim_sup_esq = f"{x_rim}, {y_rim}"
+
+    # classe do paciente
+    classe_paciente = None
+    if idx_paciente <= 16: # 0 = saudável
+        classe_paciente = "0"
+    else: # 1 = doente
+        classe_paciente = "1"
+
+    # verifica se já existe a entrada para esta imagem específica do paciente no dataset
+    duplicado = False
+    for i, linha in enumerate(dados_csv):
+        # sobrescreve os novos dados caso tenha encontrado a entrada já existente ao iterar sobre as linhas
+        if linha[0] == nome_arquivo:
+            dados_csv[i] = [nome_arquivo, classe_paciente, x_figado, y_figado, x_rim, y_rim, valor_hi]
+            duplicado = True
+            break
+
+    # caso não exista a entrada, adiciona na lista
+    if not duplicado:
+        dados_csv.append([nome_arquivo, classe_paciente, x_figado, y_figado, x_rim, y_rim, valor_hi])
+
+    # reescrita/atualização do CSV
+    with open(arquivo_csv, mode='w', newline='') as arquivo:
+        escritor_csv = csv.writer(arquivo)
+        escritor_csv.writerows(dados_csv)
+#=============== FIM DATASET ROIS EM .CSV ===============#
 
 
 
@@ -382,12 +453,14 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
         idx_paciente_corrigido = idx_paciente - 1 # correção para index começando em 0
         idx_paciente_formatado = f"{idx_paciente_corrigido:02}" # formatação com 2 dígitos
         # salva as rois
-        roi_figado_cortada = imagem[roi_figado[1]:roi_figado[3], roi_figado[0]:roi_figado[2]]
+        roi_figado_cortada = imagem[roi_figado[1]:roi_figado[3], roi_figado[0]:roi_figado[2]] # [xmin, ymin, xmax, ymax]
         roi_figado_cortada = ajusta_roi(roi_figado_cortada, hi)
         roi_figado_imagem = Image.fromarray(roi_figado_cortada)
-        roi_figado_imagem.save(f'rois/ROI_{idx_paciente_formatado}_{idx_imagem}.png')
+        nome_arquivo_roi = f'ROI_{idx_paciente_formatado}_{idx_imagem}.png'
+        roi_figado_imagem.save(f'rois/{nome_arquivo_roi}')
         # roi_rim_imagem = Image.fromarray(imagem[roi_rim[1]:roi_rim[3], roi_rim[0]:roi_rim[2]])
         # roi_rim_imagem.save(f'rois/ROI_{idx_paciente_formatado}_{idx_imagem}.png')
+        atualizar_dataset_rois(nome_arquivo_roi, idx_paciente_corrigido, roi_figado, roi_rim, hi)
         tk.messagebox.showinfo("Sucesso", "ROI salva com sucesso.")
 
     def navegar_avancar(event):
