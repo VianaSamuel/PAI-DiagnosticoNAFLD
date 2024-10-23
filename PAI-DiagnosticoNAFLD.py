@@ -227,6 +227,44 @@ def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valo
 
 
 
+#=============== PLANILHA PARA USO NO CLASSIFICADOR ===============#
+def gerar_planilha_classificador(nome_arquivo, idx_paciente, caracteristica):
+    # tratamento de erro se não tiver algum dos dados
+    if not nome_arquivo or not caracteristica:
+        tk.messagebox.showerror("Erro", f"Erro: dados inconsistentes.\nnome_arquivo: {nome_arquivo}\nidx_paciente: {idx_paciente}\caracteristica: {caracteristica}")  
+        return
+    
+    # configura nome do arquivo e verifica se o mesmo já existe
+    arquivo_csv = "planilha_pra_uso_no_classificador.csv"
+    existe_arquivo = os.path.isfile(arquivo_csv)
+    dados_csv = []
+
+    # se arquivo não existe, cria o cabeçalho
+    if not existe_arquivo:
+        dados_csv.append(["nome_arquivo", "classe", "caracteristica"])
+
+    # se arquivo existe, carrega dados existentes
+    if existe_arquivo:
+        with open(arquivo_csv, mode='r', newline='') as arquivo:
+            leitor_csv = csv.reader(arquivo)
+            dados_csv = list(leitor_csv)
+
+    # classe do paciente
+    classe_paciente = None
+    if idx_paciente <= 16: # 0 = saudável
+        classe_paciente = "0"
+    else: # 1 = doente
+        classe_paciente = "1"
+
+    # reescrita/atualização do CSV
+    dados_csv.append([nome_arquivo, classe_paciente, caracteristica])
+    with open(arquivo_csv, mode='w', newline='') as arquivo:
+        escritor_csv = csv.writer(arquivo)
+        escritor_csv.writerows(dados_csv)
+#=============== FIM PLANILHA PARA USO NO CLASSIFICADOR ===============#
+
+
+
 #=============== JANELA - BOTÃO 1 (imagens + histogramas) ===============#
 def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1, titulo = ""):
     def prepara_a_tela():
