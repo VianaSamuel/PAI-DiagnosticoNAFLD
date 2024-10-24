@@ -106,8 +106,8 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 <br>
 
-## 8. Local Binary Pattern (LPB)
-- [ ] Calcular Local Binary Pattern (LPB): energia e entropia com raios = 1, 2, 4, 8
+## 8. Local Binary Pattern (LBP)
+- [ ] Calcular Local Binary Pattern (LBP), energia e entropia, com raios = 1, 2, 4, 8
 
 <br>
 
@@ -116,3 +116,8 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
   - [ ] Nome do arquivo
   - [ ] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
   - [ ] Características calculadas
+
+
+  pra fazer:
+  consertar calculo dos descritores de haralic
+  consertar front janela descritores

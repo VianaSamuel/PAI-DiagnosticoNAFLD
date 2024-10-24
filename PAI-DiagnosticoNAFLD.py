@@ -7,12 +7,14 @@
 # subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
 # subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
 # subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-image"])
 
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import csv
 import scipy.io
+import skimage
 from PIL import Image
 import tkinter as tk
 from tkinter import ttk, filedialog
@@ -26,7 +28,6 @@ from matplotlib.widgets import Button, RectangleSelector
 def carregar_imagens():
     # salva os caminhos das imagens a serem carregadas
     vetor_caminhos_imagens = filedialog.askopenfilenames(title="Selecionar imagens", filetypes=[("Imagens ou Dataset", "*.mat;*.jpg;*.png")])
-    
     # carregamento e processamento de cada imagem
     vetor_pacientes = [[]] # indice 0: imagens avulsas, indice 1 em diante: imagens de cada paciente. pacientes vao de 1 a 55
     salva_vetor_pacientes(vetor_caminhos=vetor_caminhos_imagens, vetor_pacientes=vetor_pacientes)
@@ -106,7 +107,6 @@ def prepara_ids(vetor_pacientes, funcao):
 def calculo_histograma(imagem):
     # iniciliza array do histograma com 256 valores de intensidade (0 a 255), todos com 0
     histograma = [0 for _ in range(256)]
-
     # percorre imagem pixel por pixel, contando a frequência de cada valor de intensidade
     for x in range(len(imagem)): # percorre as linhas (altura) da imagem
         for y in range(len(imagem[x])): # percorre as colunas (largura) da imagem
@@ -125,6 +125,17 @@ def media_histograma(histograma, imagem):
     for i in range(256):
         soma += histograma[i] * i
     return soma / numero_pixels
+
+#=(CÁLCULO - normalização do histograma)
+def normalizar_histograma(histograma):
+    numero_pixels = sum(histograma)
+    if numero_pixels == 0:
+        tk.messagebox.showerror("Erro", f"Histograma com 0 pixels.\n{histograma}")
+        return None
+    histograma_normalizado = []
+    for intensidade in histograma:
+        histograma_normalizado.append(intensidade / numero_pixels)
+    return histograma_normalizado
 #=============== FIM CÁLCULO DO HISTOGRAMA ===============#
 
 
@@ -157,17 +168,89 @@ def ajusta_roi(roi_figado, hi):
 
 
 
-#=============== CÁLCULO DE ÍNDICE HEPATORENAL ===============#
-
-def calcula_matriz_ci(imagem, deltax, deltay):
+#=============== CÁLCULO DE GLCMs ===============#
+#=(CALCULO - matriz ci)
+def calcula_glcm(imagem, deltax, deltay):
     matriz_ci = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz de coocorrência, toda com 0
-    for linha, y in enumerate(imagem):
-        for _, x in enumerate(linha):
-            if y+deltay < len(imagem) and x+deltax < len(linha):
+    for y, linha in enumerate(imagem):
+        for x, _ in enumerate(linha):
+            if y+deltay < len(imagem) and x+deltax < len(linha) and y+deltay >= 0 and x+deltax >= 0:
                 cor1 = imagem[y][x]
-                cor2 = imagem[y+deltax][x+deltay]
+                cor2 = imagem[y+deltay][x+deltax]
                 matriz_ci[cor1][cor2] += 1
     return matriz_ci
+
+#=(CÁLCULO - GLCMs radiais)
+# cada raio vai ser um "anel" em volta do pixel. essa função chama o cálculo das glcms para cada combinação de x e y do raio
+def calcula_glcms_radiais(imagem):
+    if not imagem:
+        return None
+    raios = (1, 2, 4, 8)
+    glcms = []
+    for raio in raios:
+        glcms_raio = []
+        # itera pelas combinações de deslocamentos, adicionando os resultados na lista
+        for deslocamento_x in range(raio):
+            for deslocamento_y in range(raio):
+                if deslocamento_y == 0 and deslocamento_x == 0: # não checa o pixel com ele mesmo
+                    continue
+                para_checar = ([],[]) # (x, y)
+                if deslocamento_x == 0: # adiciona o deslocamento à lista dos que vão ser checados
+                    para_checar[0].append(0)
+                else:
+                    para_checar[0].append(deslocamento_x)
+                    para_checar[0].append(-deslocamento_x)
+                if deslocamento_y == 0:
+                    para_checar[1].append(0)
+                else:
+                    para_checar[1].append(deslocamento_y)
+                    para_checar[1].append(-deslocamento_y)
+                for x in para_checar[0]: # chama o cálculo para cada deslocamento previamente determinado
+                    for y in para_checar[1]:
+                        glcms_raio.append(calcula_glcm(imagem, x, y))
+        glcm_final_raio = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz final do raio com tudo 0
+        for glcm in glcms_raio:
+            for i in range(256):
+                for j in range(256):
+                    glcm_final_raio[i][j] += glcm[i][j] # soma a coocorrência de cada pixel do anel de deslocamentos a uma matriz consolidada
+        glcms.append(glcm_final_raio)
+    return glcms
+        
+#=============== FIM CÁLCULO DE GLCMs ===============#
+
+
+
+#=============== DESCRITORES DE HARALICK ===============#
+#=(DESCRITORES - GLCMs)
+def calcula_descritores_haralick(glcm):
+    # conversão pra array numpy
+    glcm_np = np.array(glcm)
+    # energia
+    energia = np.sum(glcm_np ** 2)
+    # entropia
+    glcm_log = np.where(glcm_np > 0, glcm_np, 1e-10)  # evitar log(0) substituindo 0 por valor muito pequeno
+    entropia = -np.sum(glcm_np * np.log2(glcm_log))
+    return [energia, entropia]
+#=============== FIM DESCRITORES DE HARALICK ===============#
+
+
+
+#=============== CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
+def calcula_lbp(roi):
+    raios = [1, 2, 4, 8]
+    num_vizinhos = 8
+    resultados = []
+    for raio in raios:
+        lbp = skimage.feature.local_binary_pattern(np.array(roi), num_vizinhos, raio, method='uniform')  # cálculo do LBP
+        lbp = lbp.astype(np.uint8) # conversão de LBP para inteiros (para obter histograma)
+        histograma_lbp = calculo_histograma(lbp)
+        histograma_lbp_normalizado = normalizar_histograma(histograma_lbp)
+        descritores_lbp = calcula_descritores_haralick(histograma_lbp_normalizado)
+        resultados.append(descritores_lbp)
+    return resultados
+#=============== FIM CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
+
+
 
 #=============== DATASET ROIS EM .CSV ===============#
 def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valor_hi):
@@ -184,7 +267,6 @@ def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valo
     # se arquivo não existe, cria o cabeçalho
     if not existe_arquivo:
         dados_csv.append(["nome_arquivo", "classe", "canto_superior_esquerdo_figado", "canto_superior_esquerdo_rim", "valor_hi"])
-
     # se arquivo existe, carrega dados existentes
     if existe_arquivo:
         with open(arquivo_csv, mode='r', newline='') as arquivo:
@@ -196,8 +278,6 @@ def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valo
     y_figado = roi_figado[1]
     x_rim = roi_rim[0]
     y_rim = roi_rim[1]
-    # figado_sup_esq = f"{x_figado}, {y_figado}"
-    # rim_sup_esq = f"{x_rim}, {y_rim}"
 
     # classe do paciente
     classe_paciente = None
@@ -228,10 +308,10 @@ def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valo
 
 
 #=============== PLANILHA PARA USO NO CLASSIFICADOR ===============#
-def gerar_planilha_classificador(nome_arquivo, idx_paciente, caracteristica):
+def gerar_planilha_classificador(nome_arquivo, idx_paciente, energia, entropia):
     # tratamento de erro se não tiver algum dos dados
-    if not nome_arquivo or not caracteristica:
-        tk.messagebox.showerror("Erro", f"Erro: dados inconsistentes.\nnome_arquivo: {nome_arquivo}\nidx_paciente: {idx_paciente}\caracteristica: {caracteristica}")  
+    if not nome_arquivo or not energia or not entropia:
+        tk.messagebox.showerror("Erro", f"Erro: dados inconsistentes.\nnome_arquivo: {nome_arquivo}\nidx_paciente: {idx_paciente}\energia: {energia}\nentropia: {entropia}")  
         return
     
     # configura nome do arquivo e verifica se o mesmo já existe
@@ -241,7 +321,7 @@ def gerar_planilha_classificador(nome_arquivo, idx_paciente, caracteristica):
 
     # se arquivo não existe, cria o cabeçalho
     if not existe_arquivo:
-        dados_csv.append(["nome_arquivo", "classe", "caracteristica"])
+        dados_csv.append(["nome_arquivo", "classe", "energia", "entropia"])
 
     # se arquivo existe, carrega dados existentes
     if existe_arquivo:
@@ -257,7 +337,7 @@ def gerar_planilha_classificador(nome_arquivo, idx_paciente, caracteristica):
         classe_paciente = "1"
 
     # reescrita/atualização do CSV
-    dados_csv.append([nome_arquivo, classe_paciente, caracteristica])
+    dados_csv.append([nome_arquivo, classe_paciente, energia, entropia])
     with open(arquivo_csv, mode='w', newline='') as arquivo:
         escritor_csv = csv.writer(arquivo)
         escritor_csv.writerows(dados_csv)
@@ -364,7 +444,6 @@ def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1
     # conecta os eventos de botões do teclado. especificamente, navegação via setas
     figura.canvas.mpl_connect('key_press_event', on_key)
     figura.canvas.manager.set_window_title("Imagem + Histograma")
-
     # cria os botões. pode navegar via teclado ou os botões
     localizacao_botao_avancar = plt.axes([0.2, 0.04, 0.1, 0.075])
     localizacao_botao_retroceder = plt.axes([0.1, 0.04, 0.1, 0.075])
@@ -499,7 +578,8 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
         # roi_rim_imagem = Image.fromarray(imagem[roi_rim[1]:roi_rim[3], roi_rim[0]:roi_rim[2]])
         # roi_rim_imagem.save(f'rois/ROI_{idx_paciente_formatado}_{idx_imagem}.png')
         atualizar_dataset_rois(nome_arquivo_roi, idx_paciente_corrigido, roi_figado, roi_rim, hi)
-        tk.messagebox.showinfo("Sucesso", "ROI salva com sucesso.")
+        #tk.messagebox.showinfo("Sucesso", "ROI salva com sucesso.")
+        print(f"deu certo {nome_arquivo_roi}")
 
     def navegar_avancar(event):
         nonlocal idx_paciente
@@ -682,6 +762,115 @@ def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titul
 
 
 
+#=============== JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
+def janela_descritores_haralick(vetor_rois=None, idx_roi=-1, roi_atual=None, descritores=None):
+    descritores = []
+
+    def prepara_a_tela():
+        nonlocal roi_atual
+        nonlocal idx_roi
+        if(len(vetor_rois) > 0): # se tem alguma roi salva
+            roi_atual = vetor_rois[idx_roi]
+            calcula_descritores()
+            texto_descritores =  f"ROI: {idx_roi}\n"
+            for i in range(len(descritores)):
+                #print(f"energia: {energia}, entropia: {entropia}")
+                texto_descritores += f"Raio {2**i}:\n"
+                texto_descritores += f"Energia: {descritores[i][0]:.2f}\n"
+                texto_descritores += f"Entropia: {descritores[i][1]:.2f}\n\n"
+            if len(ax.texts) > 0:
+                # se o objeto do texto existir, só renomeia
+                ax.texts[0].set_text(texto_descritores)
+            else:
+                # adiciona o texto a tela
+                ax.text(0.4, -0.1, texto_descritores, horizontalalignment='center', verticalalignment='top', transform=ax.transAxes, fontsize=12)
+           # atualiza_tela()
+        else:
+            tk.messagebox.showerror("Erro", "Nenhuma ROI salva.")
+            return
+        # atualiza a tela
+        plt.draw()
+        
+    def navegar_avancar(event):
+        nonlocal idx_roi, descritores
+        if idx_roi < len(vetor_rois) - 1: # se nao é a ultima roi
+            idx_roi += 1
+        descritores = []
+        prepara_a_tela()
+    
+    def navegar_retroceder(event):
+        nonlocal idx_roi, descritores
+        if idx_roi > 0:  # se não é a primeira roi
+            idx_roi -= 1
+        descritores = []
+        prepara_a_tela()
+
+    def calcula_descritores():
+        nonlocal roi_atual, descritores
+        imagem_roi = roi_atual[0]
+        nome_arquivo_roi = roi_atual[1]
+        # # exibe a imagem à esquerda
+        # imagem_histograma[0].imshow(imagem_roi, cmap='gray')
+        # imagem_histograma[0].set_title(nome_arquivo_roi)
+        # imagem_histograma[0].axis('off')
+        # # calcula o histograma
+        # histograma = calculo_histograma(imagem_roi)
+        # # exibe o histograma à direita
+        # imagem_histograma[1].plot(histograma, color='black')
+        # imagem_histograma[1].set_title('Histograma')
+        # imagem_histograma[1].set_xlim([0, 255])
+        # imagem_histograma[1].set_xlabel('Intensidade')
+        # imagem_histograma[1].set_ylabel('Frequência')
+        glcms = calcula_glcms_radiais(imagem_roi)
+        for glcm in glcms:
+            energia, entropia = calcula_descritores_haralick(glcm)
+            descritores.append((energia, entropia))
+
+
+    def on_key(event): # trocar de roi via setas do teclado
+        if event.key == 'right':
+            navegar_avancar(event)
+        elif event.key == 'left':
+            navegar_retroceder(event)
+
+    # cria a figura e os subplots
+    figura, ax = plt.subplots(figsize=(10, 8)) 
+
+    # conecta os eventos de botões do teclado. especificamente, navegação via setas
+    figura.canvas.mpl_connect('key_press_event', on_key)
+    figura.canvas.manager.set_window_title("Descritores")
+
+    # cria os botões. pode navegar via teclado ou os botões
+    localizacao_botao_avancar = plt.axes([0.2, 0.04, 0.1, 0.075])
+    localizacao_botao_retroceder = plt.axes([0.1, 0.04, 0.1, 0.075])
+    botao_avancar = plt.Button(localizacao_botao_avancar, '>')
+    botao_retroceder = plt.Button(localizacao_botao_retroceder, '<')
+    botao_avancar.on_clicked(navegar_avancar)
+    botao_retroceder.on_clicked(navegar_retroceder)
+    # localizacao_botao_reseta = plt.axes([0.35, 0.04, 0.1, 0.075])
+    # botao_reseta = Button(localizacao_botao_reseta, 'Resetar Zoom')
+    # botao_reseta.on_clicked(reseta_zoom)
+
+    vetor_rois = carrega_rois()
+    prepara_a_tela()
+
+    # # criação do seletor para zoom
+    # seletor = RectangleSelector(ax[0], aplica_zoom,
+    #                             useblit=True,
+    #                             button=[1, 3],  # 1: esquerdo, 3: direito
+    #                             minspanx=5, minspany=5,
+    #                             spancoords='pixels',
+    #                             interactive=True,
+    #                             props=dict(facecolor='none', edgecolor='red', alpha=1.0, fill=False)) # deixa o retângulo transparente
+    # seletor.set_active(True)
+
+    # insere a figura na tela
+    plt.tight_layout()
+    plt.show()
+#=============== FIM JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
+
+
+
 #=============== GUI ===============#
 def menu_principal():
     # config: janela, resolução, estilização
@@ -705,7 +894,7 @@ def menu_principal():
     btn1.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
     btn2 = tk.Button(menu_principal, text="Visualizar (ROIs Geradas + Histogramas)", command=janela_rois_e_histogramas, width=50, height=2)
     btn2.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
-    btn3 = tk.Button(menu_principal, text="Calcular (GLCM + Descritores de Textura) de uma ROI", width=50, height=2)
+    btn3 = tk.Button(menu_principal, text="Calcular (GLCM + Descritores de Textura) de uma ROI", command=janela_descritores_haralick, width=50, height=2)
     btn3.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
     btn4 = tk.Button(menu_principal, text="Caracterizar (ROIs Geradas) através de Descritor de Textura", width=50, height=2)
     btn4.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
