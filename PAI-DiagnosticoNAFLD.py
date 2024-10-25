@@ -2,12 +2,12 @@
 # Samuel Luiz da Cunha Viana Cruz (762496)
 
 # instalando bibliotecas necessárias
-# import subprocess
-# import sys
-# subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
-# subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
-# subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
-# subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-image"])
+import subprocess
+import sys
+subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-image"])
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -104,7 +104,7 @@ def prepara_ids(vetor_pacientes, funcao):
 
 #=============== CÁLCULO DO HISTOGRAMA ===============#
 #=(CALCULO - histograma)
-def calculo_histograma(imagem):
+def calcula_histograma(imagem):
     # iniciliza array do histograma com 256 valores de intensidade (0 a 255), todos com 0
     histograma = [0 for _ in range(256)]
     # percorre imagem pixel por pixel, contando a frequência de cada valor de intensidade
@@ -143,8 +143,8 @@ def normalizar_histograma(histograma):
 #=============== CÁLCULO DO ÍNDICE HEPATORENAL ===============#
 #=(CALCULO - hi)
 def calculo_hi(roi_figado_img, roi_rim_img):
-    histograma_figado = calculo_histograma(roi_figado_img)
-    histograma_rim = calculo_histograma(roi_rim_img)
+    histograma_figado = calcula_histograma(roi_figado_img)
+    histograma_rim = calcula_histograma(roi_rim_img)
     media_tons_cinza_roi_figado = media_histograma(histograma_figado, roi_figado_img)
     print(f"media de tons de cinza figado: {media_tons_cinza_roi_figado}")
     media_tons_cinza_roi_rim = media_histograma(histograma_rim, roi_rim_img)
@@ -168,86 +168,143 @@ def ajusta_roi(roi_figado, hi):
 
 
 
-#=============== CÁLCULO DE GLCMs ===============#
-#=(CALCULO - matriz ci)
-def calcula_glcm(imagem, deltax, deltay):
-    matriz_ci = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz de coocorrência, toda com 0
-    for y, linha in enumerate(imagem):
-        for x, _ in enumerate(linha):
-            if y+deltay < len(imagem) and x+deltax < len(linha) and y+deltay >= 0 and x+deltax >= 0:
-                cor1 = imagem[y][x]
-                cor2 = imagem[y+deltay][x+deltax]
-                matriz_ci[cor1][cor2] += 1
-    return matriz_ci
+#=============== CÁLCULO DE GLCMs + DESCRITORES DE HARALICK ===============#
+#=(CALCULO - GLCMs radiais + descritores de haralick)
+def glcm_biblioteca(imagem):
+    raios =  (1, 2, 4, 8)
+    glcms = skimage.feature.graycomatrix(imagem, 
+                                        distances=raios, 
+                                        angles=[np.radians(0), np.radians(45), np.radians(90), np.radians(135)],
+                                        levels=256,
+                                        symmetric=True,
+                                        normed=True
+                                        )
+    #print("homogeneidade")
+    homogeneidades = skimage.feature.graycoprops(glcms, 'homogeneity') # [raio][angulo]
+    #print("energia")
+    energias = skimage.feature.graycoprops(glcms, 'energy')
+    angulos = len(homogeneidades)
+    homogeneidades_tratadas = [sum(homogeneidades[i])/angulos for i in range(angulos)] # faz a media das homogeneidades dos angulos
+    energias_tratadas = [sum(energias[i])/angulos for i in range(angulos)]
+    # antes: glcms = [i][j][raio][angulo]
+    glcms = soma_angulos(glcms) # depois: glcms = [raio][i][j]
+    #print("entropias")
+    entropias = calcula_entropias(glcms)
+    return (glcms, entropias, homogeneidades_tratadas, energias_tratadas)
 
-#=(CÁLCULO - GLCMs radiais)
-# cada raio vai ser um "anel" em volta do pixel. essa função chama o cálculo das glcms para cada combinação de x e y do raio
-def calcula_glcms_radiais(imagem):
-    if not imagem:
-        return None
-    raios = (1, 2, 4, 8)
-    glcms = []
-    for raio in raios:
-        glcms_raio = []
-        # itera pelas combinações de deslocamentos, adicionando os resultados na lista
-        for deslocamento_x in range(raio):
-            for deslocamento_y in range(raio):
-                if deslocamento_y == 0 and deslocamento_x == 0: # não checa o pixel com ele mesmo
-                    continue
-                para_checar = ([],[]) # (x, y)
-                if deslocamento_x == 0: # adiciona o deslocamento à lista dos que vão ser checados
-                    para_checar[0].append(0)
-                else:
-                    para_checar[0].append(deslocamento_x)
-                    para_checar[0].append(-deslocamento_x)
-                if deslocamento_y == 0:
-                    para_checar[1].append(0)
-                else:
-                    para_checar[1].append(deslocamento_y)
-                    para_checar[1].append(-deslocamento_y)
-                for x in para_checar[0]: # chama o cálculo para cada deslocamento previamente determinado
-                    for y in para_checar[1]:
-                        glcms_raio.append(calcula_glcm(imagem, x, y))
-        glcm_final_raio = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz final do raio com tudo 0
-        for glcm in glcms_raio:
-            for i in range(256):
-                for j in range(256):
-                    glcm_final_raio[i][j] += glcm[i][j] # soma a coocorrência de cada pixel do anel de deslocamentos a uma matriz consolidada
-        glcms.append(glcm_final_raio)
-    return glcms
+#=(AUXILIAR - cálculo de entropia)
+def calcula_entropias(glcms): # precisa da glcm estar no formato [raio][i][j]
+    entropias = []
+    for raio, glcm in enumerate(glcms):
+        entropia = 0
+        for i in range(256):
+            for j in range(256):
+                pixel = glcm[i][j]
+                if pixel != 0:
+                    entropia += pixel * np.log2(pixel)
+        entropias.append(-entropia)
+    return entropias
+
+#=(AUXILIAR - soma ângulos da GLCM)
+def soma_angulos(glcms): # a glcm vem dividida para cada raio e angulo. aqui a gente soma
+    # glcms[i][j][raio][angulo] -> glcms[raio][i][j]
+    glcms_finais = [[[0 for _ in range(256)] for _ in range(256)] for _ in range(4)] # junta as glcms de mesmo raio em uma só. começa com 0 para somar depois
+    for raio in range(4):
+        for i in range(256):
+            for j in range(256):
+                for angulo in range(4):
+                    glcms_finais[raio][i][j] += glcms[i][j][raio][angulo]
+    return glcms_finais
         
-#=============== FIM CÁLCULO DE GLCMs ===============#
+# refizemos, desse jeito não deu certo
+###### cada raio vai ser um "anel" em volta do pixel. essa função chama o cálculo das glcms para cada combinação de x e y do raio
+#####def calcula_glcms_radiais(imagem): # NAO TA USANDO MAISS
+#####    if not imagem:
+#####        return None
+#####    raios = (1, 2, 4, 8)
+#####    glcms = []
+#####    for raio in raios:
+#####        glcms_raio = []
+#####        # itera pelas combinações de deslocamentos, adicionando os resultados na lista
+#####        for deslocamento_x in range(-raio, raio + 1):
+#####            for deslocamento_y in range(-raio, raio + 1):
+#####                para_checar = ([],[]) # (x, y)
+#####                # se o valor absoluto do deslocamento for igual ao raio, então o pixel faz parte do anel de raio daquele tamanho
+#####                if abs(deslocamento_y) == raio or abs(deslocamento_x) == raio:
+#####                    # adiciona o pixel
+#####                    para_checar[0].append(deslocamento_x)
+#####                    para_checar[1].append(deslocamento_y)
+#####                    
+#####                # if deslocamento_y == 0 and deslocamento_x == 0: # não checa o pixel com ele mesmo
+#####                #     continue
+#####                # if deslocamento_x == 0: # adiciona o deslocamento à lista dos que vão ser checados
+#####                #     para_checar[0].append(0)
+#####                # else:
+#####                #     para_checar[0].append(deslocamento_x)
+#####                #     para_checar[0].append(-deslocamento_x)
+#####                # if deslocamento_y == 0:
+#####                #     para_checar[1].append(0)
+#####                # else:
+#####                #     para_checar[1].append(deslocamento_y)
+#####                #     para_checar[1].append(-deslocamento_y)
+#####                for x in para_checar[0]: # chama o cálculo para cada deslocamento previamente determinado
+#####                    for y in para_checar[1]:
+#####                        glcms_raio.append(calcula_glcm2(imagem, x, y))
+#####        glcm_final_raio = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz final do raio com tudo 0
+#####        for glcm in glcms_raio:
+#####            for i in range(256):
+#####                for j in range(256):
+#####                    glcm_final_raio[i][j] += glcm[i][j] # soma a coocorrência de cada pixel do anel de deslocamentos a uma matriz consolidada
+#####        glcms.append(glcm_final_raio)
+#####    return glcms
+#####
 
+# refizemos, desse jeito não deu certo
+#########def calcula_glcm(imagem, deltax, deltay):
+#########    matriz_ci = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz de coocorrência, toda com 0
+#########    for y, linha in enumerate(imagem):
+#########        for x, _ in enumerate(linha):
+#########            if y+deltay < len(imagem) and x+deltax < len(linha) and y+deltay >= 0 and x+deltax >= 0:
+#########                cor1 = imagem[y][x]
+#########                cor2 = imagem[y+deltay][x+deltax]
+#########                matriz_ci[cor1][cor2] += 1
+#########    return matriz_ci
 
-
-#=============== DESCRITORES DE HARALICK ===============#
-#=(DESCRITORES - GLCMs)
-def calcula_descritores_haralick(glcm):
-    # conversão pra array numpy
-    glcm_np = np.array(glcm)
-    # energia
-    energia = np.sum(glcm_np ** 2)
-    # entropia
-    glcm_log = np.where(glcm_np > 0, glcm_np, 1e-10)  # evitar log(0) substituindo 0 por valor muito pequeno
-    entropia = -np.sum(glcm_np * np.log2(glcm_log))
-    return [energia, entropia]
-#=============== FIM DESCRITORES DE HARALICK ===============#
+# refizemos, desse jeito não deu certo
+#########def calcula_descritores_haralick(glcm):
+#########    # conversão pra array numpy
+#########    glcm_np = np.array(glcm)
+#########    # homogeneidade
+#########    indices = np.indices(glcm_np.shape) # arrays com indices i e j para cada posição da matriz
+#########    i, j = indices[0], indices[1]
+#########    diferenca_indices = np.abs(i - j) # diferença absoluta entre indices i e j
+#########    denominador = 1 + diferenca_indices # evitar divisão por 0
+#########    matriz_pesos = glcm_np / denominador # divide cada elemento da GLCM pelo denominador correspondente
+#########    homogeneidade = np.sum(matriz_pesos) # somatório final
+#########    # energia
+#########    energia = np.sum(glcm_np ** 2)
+#########    # entropia
+#########    glcm_log = np.where(glcm_np > 0, glcm_np, 1e-10)  # evitar log(0) substituindo 0 por valor muito pequeno
+#########    entropia = -np.sum(glcm_np * np.log2(glcm_log))
+#########    return [homogeneidade, entropia, energia]
+######=============== FIM CÁLCULO DE GLCMs + DESCRITORES DE HARALICK ===============#
 
 
 
 #=============== CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
-def calcula_lbp(roi):
+def calcula_lbps(roi): # retorna um vetor no formato [raio_lbp][descritor][raio_glcm][i][j]
+    print("lbps")
     raios = [1, 2, 4, 8]
     num_vizinhos = 8
-    resultados = []
+    lbps = []
     for raio in raios:
+        print(f"calculando lbp raio: {raio}")
         lbp = skimage.feature.local_binary_pattern(np.array(roi), num_vizinhos, raio, method='uniform')  # cálculo do LBP
         lbp = lbp.astype(np.uint8) # conversão de LBP para inteiros (para obter histograma)
-        histograma_lbp = calculo_histograma(lbp)
-        histograma_lbp_normalizado = normalizar_histograma(histograma_lbp)
-        descritores_lbp = calcula_descritores_haralick(histograma_lbp_normalizado)
-        resultados.append(descritores_lbp)
-    return resultados
+        print("descritores")
+        descritores_lbp = glcm_biblioteca(lbp)
+        lbps.append(descritores_lbp)
+    return lbps
 #=============== FIM CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
 
 
@@ -307,41 +364,139 @@ def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valo
 
 
 
-#=============== PLANILHA PARA USO NO CLASSIFICADOR ===============#
-def gerar_planilha_classificador(nome_arquivo, idx_paciente, energia, entropia):
-    # tratamento de erro se não tiver algum dos dados
-    if not nome_arquivo or not energia or not entropia:
-        tk.messagebox.showerror("Erro", f"Erro: dados inconsistentes.\nnome_arquivo: {nome_arquivo}\nidx_paciente: {idx_paciente}\energia: {energia}\nentropia: {entropia}")  
-        return
+#=============== .CSV PARA USO NO CLASSIFICADOR ===============#
+def gerar_planilha_classificador():
+    # le todas as rois em arquivos
+    # gera os descritores de haralick e lbp para cada roi
+    # adiciona os dados ao csv
     
     # configura nome do arquivo e verifica se o mesmo já existe
     arquivo_csv = "planilha_pra_uso_no_classificador.csv"
-    existe_arquivo = os.path.isfile(arquivo_csv)
     dados_csv = []
 
-    # se arquivo não existe, cria o cabeçalho
-    if not existe_arquivo:
-        dados_csv.append(["nome_arquivo", "classe", "energia", "entropia"])
+    dados_csv.append(["nome_arquivo", 
+                      "classe",
+                      "roi_entropia_1",
+                      "roi_entropia_2",
+                      "roi_entropia_4",
+                      "roi_entropia_8",
+                      "roi_homogeneidade_1",
+                      "roi_homogeneidade_2",
+                      "roi_homogeneidade_4",
+                      "roi_homogeneidade_8",
+                      "lbp_1_entropia_1",
+                      "lbp_1_entropia_2",
+                      "lbp_1_entropia_4",
+                      "lbp_1_entropia_8",
+                      "lbp_1_energia_1",
+                      "lbp_1_energia_2",
+                      "lbp_1_energia_4",
+                      "lbp_1_energia_8",
+                      "lbp_2_entropia_1",
+                      "lbp_2_entropia_2",
+                      "lbp_2_entropia_4",
+                      "lbp_2_entropia_8",
+                      "lbp_2_energia_1",
+                      "lbp_2_energia_2",
+                      "lbp_2_energia_4",
+                      "lbp_2_energia_8",
+                      "lbp_4_entropia_1",
+                      "lbp_4_entropia_2",
+                      "lbp_4_entropia_4",
+                      "lbp_4_entropia_8",
+                      "lbp_4_energia_1",
+                      "lbp_4_energia_2",
+                      "lbp_4_energia_4",
+                      "lbp_4_energia_8",
+                      "lbp_8_entropia_1",
+                      "lbp_8_entropia_2",
+                      "lbp_8_entropia_4",
+                      "lbp_8_entropia_8",
+                      "lbp_8_energia_1",
+                      "lbp_8_energia_2",
+                      "lbp_8_energia_4",
+                      "lbp_8_energia_8",
+                      ])
+
+    rois = carrega_rois()
+    if not rois:
+        tk.messagebox.showerror("Erro", "Nenhuma ROI salva.")
+        return
+
+    for roi in rois:
+        # calcula descritores
+        descritores = glcm_biblioteca(roi[0])
+        # calcula lbp e seus descritores
+        lbps = calcula_lbps(roi[0])
+        # classe do paciente - 0: saudável, 1: doente
+        idx_paciente = int(roi[1].split("_")[1])
+        classe_paciente = 0 if idx_paciente <= 16 else 1
+        # salva no csv
+        dados_csv.append([roi[1],
+                          classe_paciente,
+                          descritores[1][0],
+                          descritores[1][1],
+                          descritores[1][2],
+                          descritores[1][3],
+                          descritores[2][0],
+                          descritores[2][1],
+                          descritores[2][2],
+                          descritores[2][3],
+                          lbps[0][1][0],
+                          lbps[0][1][1],
+                          lbps[0][1][2],
+                          lbps[0][1][3],
+                          lbps[0][3][0],
+                          lbps[0][3][1],
+                          lbps[0][3][2],
+                          lbps[0][3][3],
+                          lbps[1][1][0],
+                          lbps[1][1][1],
+                          lbps[1][1][2],
+                          lbps[1][1][3],
+                          lbps[1][3][0],
+                          lbps[1][3][1],
+                          lbps[1][3][2],
+                          lbps[1][3][3],
+                          lbps[2][1][0],
+                          lbps[2][1][1],
+                          lbps[2][1][2],
+                          lbps[2][1][3],
+                          lbps[2][3][0],
+                          lbps[2][3][1],
+                          lbps[2][3][2],
+                          lbps[2][3][3],
+                          lbps[3][1][0],
+                          lbps[3][1][1],
+                          lbps[3][1][2],
+                          lbps[3][1][3],
+                          lbps[3][3][0],
+                          lbps[3][3][1],
+                          lbps[3][3][2],
+                          lbps[3][3][3]
+                        ])
+
 
     # se arquivo existe, carrega dados existentes
-    if existe_arquivo:
-        with open(arquivo_csv, mode='r', newline='') as arquivo:
-            leitor_csv = csv.reader(arquivo)
-            dados_csv = list(leitor_csv)
+    # if existe_arquivo:
+    #     with open(arquivo_csv, mode='r', newline='') as arquivo:
+    #         leitor_csv = csv.reader(arquivo)
+    #         dados_csv = list(leitor_csv)
 
     # classe do paciente
-    classe_paciente = None
-    if idx_paciente <= 16: # 0 = saudável
-        classe_paciente = "0"
-    else: # 1 = doente
-        classe_paciente = "1"
+    # classe_paciente = None
+    # if idx_paciente <= 16: # 0 = saudável
+    #     classe_paciente = "0"
+    # else: # 1 = doente
+    #     classe_paciente = "1"
 
     # reescrita/atualização do CSV
-    dados_csv.append([nome_arquivo, classe_paciente, energia, entropia])
+    #### dados_csv.append([nome_arquivo, classe_paciente, energia, entropia])
     with open(arquivo_csv, mode='w', newline='') as arquivo:
         escritor_csv = csv.writer(arquivo)
         escritor_csv.writerows(dados_csv)
-#=============== FIM PLANILHA PARA USO NO CLASSIFICADOR ===============#
+        tk.messagebox.showinfo("Resultado", "Dados salvos no CSV corretamente.")
+#=============== FIM .CSV PARA USO NO CLASSIFICADOR ===============#
 
 
 
@@ -396,7 +551,7 @@ def janela_imagens_e_histogramas(vetor_pacientes, idx_paciente=-1, idx_imagem=-1
         imagem_histograma[0].set_title(titulo)
         imagem_histograma[0].axis('off')
         # calcula o histograma
-        histograma = calculo_histograma(imagem)
+        histograma = calcula_histograma(imagem)
         histograma[0] = 0 # o fundo da imagem de ultrassom é preto. isso tira do histograma o pico do fundo, para normalizar a altura dos dados
         # exibe o histograma à direita
         imagem_histograma[1].plot(histograma, color='black')
@@ -690,7 +845,7 @@ def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titul
         imagem_histograma[0].set_title(nome_arquivo_roi)
         imagem_histograma[0].axis('off')
         # calcula o histograma
-        histograma = calculo_histograma(imagem_roi)
+        histograma = calcula_histograma(imagem_roi)
         # exibe o histograma à direita
         imagem_histograma[1].plot(histograma, color='black')
         imagem_histograma[1].set_title('Histograma')
@@ -763,70 +918,76 @@ def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titul
 
 
 #=============== JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
-def janela_descritores_haralick(vetor_rois=None, idx_roi=-1, roi_atual=None, descritores=None):
+def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, descritores=None, descritores_lbps=None):
     descritores = []
-
+    existe_texto = False
     def prepara_a_tela():
         nonlocal roi_atual
         nonlocal idx_roi
+        nonlocal existe_texto
         if(len(vetor_rois) > 0): # se tem alguma roi salva
             roi_atual = vetor_rois[idx_roi]
             calcula_descritores()
-            texto_descritores =  f"ROI: {idx_roi}\n"
-            for i in range(len(descritores)):
-                #print(f"energia: {energia}, entropia: {entropia}")
-                texto_descritores += f"Raio {2**i}:\n"
-                texto_descritores += f"Energia: {descritores[i][0]:.2f}\n"
-                texto_descritores += f"Entropia: {descritores[i][1]:.2f}\n\n"
-            if len(ax.texts) > 0:
+            texto_descritores =  f"ROI: {idx_roi}\n\n"
+            texto_descritores_lbp = ""
+            if len(descritores) <= 0:
+                tk.messagebox.showerror("Erro", "Zero descritores.")
+                return
+            for idx_raio in range(len(descritores[0])): # descritores = [descritor][raio]
+                raio = 2**idx_raio
+                entropia = descritores[1][idx_raio]
+                homogeneidade = descritores[2][idx_raio]
+                texto_descritores += f"Raio {raio}:\n"
+                texto_descritores += f"Homogeneidade: {homogeneidade}\n"
+                texto_descritores += f"Entropia: {entropia}\n\n"
+            texto_descritores_lbp += f"Descritores LBP: "
+            for idx_raio_lbp in range(len(descritores_lbps)): # descritores_lbp = [raio_lbp][descritor][raio]
+                raio_lbp = 2**idx_raio_lbp
+                texto_descritores_lbp += f"\n\nRaio {raio_lbp}:\n"
+                entropias = descritores_lbps[idx_raio_lbp][1]
+                energias = descritores_lbps[idx_raio_lbp][3]
+                texto_descritores_lbp += "Entropia: "
+                for i in entropias:
+                    texto_descritores_lbp += f"{i:.2f} / "
+                texto_descritores_lbp += "\nEnergia: "
+                for i in energias:
+                    texto_descritores_lbp += f"{i:.2f} / "
+            if existe_texto:
                 # se o objeto do texto existir, só renomeia
                 ax.texts[0].set_text(texto_descritores)
+                ax.texts[1].set_text(texto_descritores_lbp)
             else:
                 # adiciona o texto a tela
-                ax.text(0.4, -0.1, texto_descritores, horizontalalignment='center', verticalalignment='top', transform=ax.transAxes, fontsize=12)
-           # atualiza_tela()
+                ax.text(0.01, 0.9, texto_descritores, horizontalalignment='left', verticalalignment='top', transform=ax.transAxes, fontsize=12)
+                ax.text(0.6, 0.9, texto_descritores_lbp, horizontalalignment='left', verticalalignment='top', transform=ax.transAxes, fontsize=12)
+                existe_texto = True 
+            ax.set_xticks([])
+            ax.set_yticks([])
         else:
             tk.messagebox.showerror("Erro", "Nenhuma ROI salva.")
             return
         # atualiza a tela
-        plt.draw()
+        figura.canvas.draw_idle()
         
     def navegar_avancar(event):
         nonlocal idx_roi, descritores
         if idx_roi < len(vetor_rois) - 1: # se nao é a ultima roi
             idx_roi += 1
-        descritores = []
         prepara_a_tela()
     
     def navegar_retroceder(event):
         nonlocal idx_roi, descritores
         if idx_roi > 0:  # se não é a primeira roi
             idx_roi -= 1
-        descritores = []
         prepara_a_tela()
 
     def calcula_descritores():
-        nonlocal roi_atual, descritores
+        nonlocal roi_atual, descritores, descritores_lbps
         imagem_roi = roi_atual[0]
         nome_arquivo_roi = roi_atual[1]
-        # # exibe a imagem à esquerda
-        # imagem_histograma[0].imshow(imagem_roi, cmap='gray')
-        # imagem_histograma[0].set_title(nome_arquivo_roi)
-        # imagem_histograma[0].axis('off')
-        # # calcula o histograma
-        # histograma = calculo_histograma(imagem_roi)
-        # # exibe o histograma à direita
-        # imagem_histograma[1].plot(histograma, color='black')
-        # imagem_histograma[1].set_title('Histograma')
-        # imagem_histograma[1].set_xlim([0, 255])
-        # imagem_histograma[1].set_xlabel('Intensidade')
-        # imagem_histograma[1].set_ylabel('Frequência')
-        glcms = calcula_glcms_radiais(imagem_roi)
-        for glcm in glcms:
-            energia, entropia = calcula_descritores_haralick(glcm)
-            descritores.append((energia, entropia))
-
-
+        descritores = glcm_biblioteca(imagem_roi)
+        descritores_lbps = calcula_lbps(imagem_roi)
+    
     def on_key(event): # trocar de roi via setas do teclado
         if event.key == 'right':
             navegar_avancar(event)
@@ -841,31 +1002,17 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=-1, roi_atual=None, des
     figura.canvas.manager.set_window_title("Descritores")
 
     # cria os botões. pode navegar via teclado ou os botões
-    localizacao_botao_avancar = plt.axes([0.2, 0.04, 0.1, 0.075])
-    localizacao_botao_retroceder = plt.axes([0.1, 0.04, 0.1, 0.075])
+    localizacao_botao_avancar = plt.axes([0.2, 0.14, 0.1, 0.075])
+    localizacao_botao_retroceder = plt.axes([0.1, 0.14, 0.1, 0.075])
     botao_avancar = plt.Button(localizacao_botao_avancar, '>')
     botao_retroceder = plt.Button(localizacao_botao_retroceder, '<')
     botao_avancar.on_clicked(navegar_avancar)
     botao_retroceder.on_clicked(navegar_retroceder)
-    # localizacao_botao_reseta = plt.axes([0.35, 0.04, 0.1, 0.075])
-    # botao_reseta = Button(localizacao_botao_reseta, 'Resetar Zoom')
-    # botao_reseta.on_clicked(reseta_zoom)
 
     vetor_rois = carrega_rois()
     prepara_a_tela()
 
-    # # criação do seletor para zoom
-    # seletor = RectangleSelector(ax[0], aplica_zoom,
-    #                             useblit=True,
-    #                             button=[1, 3],  # 1: esquerdo, 3: direito
-    #                             minspanx=5, minspany=5,
-    #                             spancoords='pixels',
-    #                             interactive=True,
-    #                             props=dict(facecolor='none', edgecolor='red', alpha=1.0, fill=False)) # deixa o retângulo transparente
-    # seletor.set_active(True)
-
     # insere a figura na tela
-    plt.tight_layout()
     plt.show()
 #=============== FIM JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
 
@@ -894,11 +1041,11 @@ def menu_principal():
     btn1.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
     btn2 = tk.Button(menu_principal, text="Visualizar (ROIs Geradas + Histogramas)", command=janela_rois_e_histogramas, width=50, height=2)
     btn2.grid(row=2, column=0, padx=10, pady=10, sticky="nsew")
-    btn3 = tk.Button(menu_principal, text="Calcular (GLCM + Descritores de Textura) de uma ROI", command=janela_descritores_haralick, width=50, height=2)
+    btn3 = tk.Button(menu_principal, text="Exibir (Descritores de Textura [Haralick + LBPs]) de uma ROI", command=janela_descritores_haralick, width=50, height=2)
     btn3.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
-    btn4 = tk.Button(menu_principal, text="Caracterizar (ROIs Geradas) através de Descritor de Textura", width=50, height=2)
+    btn4 = tk.Button(menu_principal, text="Salvar (Características [Haralick + LBPs]) em Planilha .CSV", command=gerar_planilha_classificador, width=50, height=2)
     btn4.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
-    btn5 = tk.Button(menu_principal, text="Classificar (Imagem)", width=50, height=2)
+    btn5 = tk.Button(menu_principal, text="Classificar (Imagem) (2ª PARTE)", width=50, height=2)
     btn5.grid(row=5, column=0, padx=10, pady=10, sticky="nsew")
 
     # nomes e matrículas

@@ -46,11 +46,11 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 ### 1.4 Calcular (GLCM + Descritores de Textura) de uma ROI:
 - [x] Botão de cálculo de matrizes de co-ocorrência (GLCM) de uma ROI
-- [ ] Exibir valores dos descritores de textura da GLCM calculada
+- [x] Exibir valores dos descritores de textura da GLCM calculada
 
 ### 1.5 Caracterizar (ROIs Geradas) através de Descritor de Textura:
 - [x] Botão de caracterização de ROIs através do descritor de textura sorteado:<br>*(Local Binary Pattern (LPB), energia e entropia com raios = 1, 2, 4, 8)*
-- [ ] Exibir valores dos descritores calculados
+- [x] Exibir valores dos descritores calculados
 
 ### 1.6 Classificar (Imagem):
 - [x] Botão de classificação de imagem através da técnica selecionada
@@ -88,7 +88,7 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 ## 5. Planilha: ROIs para o Dataset
 - [ ] Gerar 550 ROIs seguindo o item anterior
-- [x] Armazenar em CSV:
+- [ ] Armazenar em CSV:
   - [x] Nome do arquivo
   - [x] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
   - [x] Canto superior esquerdo (fígado e rim)
@@ -97,27 +97,22 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 <br>
 
 ## 6. GLCMs Radiais
-- [ ] Para cada ROI, calcular 4 GLCMs radiais Ci onde i = 1, 2, 4 e 8
+- [x] Para cada ROI, calcular 4 GLCMs radiais Ci onde i = 1, 2, 4 e 8
 
 <br>
 
 ## 7. Descritores de Haralick
-- [ ] Calcular Entropia e Homogeneidade (Haralick) para cada GLCM Radial do item anterior<br>(4 * 2 características) para cada ROI
+- [x] Calcular Entropia e Homogeneidade (Haralick) para cada GLCM Radial do item anterior<br>(4 * 2 características) para cada ROI
 
 <br>
 
 ## 8. Local Binary Pattern (LBP)
-- [ ] Calcular Local Binary Pattern (LBP), energia e entropia, com raios = 1, 2, 4, 8
+- [x] Calcular Local Binary Pattern (LBP), energia e entropia, com raios = 1, 2, 4, 8
 
 <br>
 
 ## 9. Planilha: Características calculadas para uso no classificador
 - [ ] Armazenar em CSV:
-  - [ ] Nome do arquivo
-  - [ ] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
-  - [ ] Características calculadas
-
-
-  pra fazer:
-  consertar calculo dos descritores de haralic
-  consertar front janela descritores
+  - [x] Nome do arquivo
+  - [x] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
+  - [x] Características calculadas
