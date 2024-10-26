@@ -87,8 +87,8 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 <br>
 
 ## 5. Planilha: ROIs para o Dataset
-- [ ] Gerar 550 ROIs seguindo o item anterior
-- [ ] Armazenar em CSV:
+- [x] Gerar 550 ROIs seguindo o item anterior
+- [x] Armazenar em CSV:
   - [x] Nome do arquivo
   - [x] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
   - [x] Canto superior esquerdo (fígado e rim)
@@ -112,7 +112,7 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 <br>
 
 ## 9. Planilha: Características calculadas para uso no classificador
-- [ ] Armazenar em CSV:
+- [x] Armazenar em CSV:
   - [x] Nome do arquivo
   - [x] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
   - [x] Características calculadas
