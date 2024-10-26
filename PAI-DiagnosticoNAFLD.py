@@ -323,7 +323,7 @@ def atualizar_dataset_rois(nome_arquivo, idx_paciente, roi_figado, roi_rim, valo
 
     # se arquivo não existe, cria o cabeçalho
     if not existe_arquivo:
-        dados_csv.append(["nome_arquivo", "classe", "canto_superior_esquerdo_figado", "canto_superior_esquerdo_rim", "valor_hi"])
+        dados_csv.append(["nome_arquivo", "classe", "x_figado", "y_figado", "x_rim", "y_rim", "valor_hi"])
     # se arquivo existe, carrega dados existentes
     if existe_arquivo:
         with open(arquivo_csv, mode='r', newline='') as arquivo:
