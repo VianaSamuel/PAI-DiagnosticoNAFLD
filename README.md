@@ -9,18 +9,18 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 <br>
 
-### Cálculo do NT:
-**NT = 1**
-<br>
-*(Local Binary Pattern (LPB), energia e entropia com raios = 1, 2, 4, 8)*
-
+### Cálculos (NT, NC, ND):
 - **Matrícula:**
     - **Pedro:** 762281
     - **Samuel:** 762496
 
 - **Soma =** 1524777
+  
+- **NT (soma mod 4) = 1** <br>*(Local Binary Pattern (LPB), energia e entropia com raios = 1, 2, 4, 8)*
 
-- **Mod 4 =** 1
+- **NC (soma mod 2) = 1**<br>*Classificador Raso: XGBoost*
+
+- **ND (soma mod 5) = 2**<br>*Classificador Profundo: MobileNet*
 
 <br>
 
@@ -116,3 +116,55 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
   - [x] Nome do arquivo
   - [x] Classe<br>*(0-16 saudáveis, 17-54 esteatose)*
   - [x] Características calculadas
+
+<br>
+
+## 10. Divisão de Dados para Validação Cruzada:
+*(Repetir 55 vezes, validação cruzada):*
+- [ ] Separar conjuntos:
+  - [ ] Teste: 10 imagens de UM paciente
+  - [ ] Treino: Demais imagens
+- [ ] Treinar e testar classificadores com essa divisão
+- [ ] Escolher o próximo paciente para ser o conjunto de teste
+
+<br>
+
+## 11. Implementação do Classificador Binário Raso
+*(Características usadas como entrada para os classificadores:<br>Descritores de
+Haralick & *Local Binary Pattern*)*
+- [ ] Implementar o *XGBoost*
+- [ ] Avaliar médias:
+  - [ ] Acurácia
+  - [ ] Especificidade
+  - [ ] Sensibilidade
+- [ ] Exibir matriz de confusão após a validação cruzada 
+
+<br>
+
+## 12. Implementação do Classificador Profundo
+*(Entradas para os classificadores: ROIs recortadas)*
+- [ ] Implementar o *MobileNet*
+- [ ] Ajustar os pesos já disponíveis nas bibliotecas que foram treinados com o ImageNet (*fine tunning*)
+- [ ] Avaliar:
+  - [ ] Acurácia
+- [ ] Exibir matriz de confusão de cada uma após a validação cruzada
+- [ ] Plotar os gráficos de aprendizado médios (acurácia de treino e teste após cada época)
+
+<br>
+
+## 13. Comparação de Resultados
+- [ ] Comparar os resultados obtidos entre as soluções
+
+<br>
+
+## 14. Documentação
+- [ ] Descrição do problema
+- [ ] Descrição das técnicas implementadas para a solução (classificadores e características)
+- [ ] Descrição dos dados
+- [ ] Referências das bibliotecas utilizadas na implementação
+- [ ] Medidas de tempo de execução para:
+  - [ ] Diversas imagens
+  - [ ] Descritores
+  - [ ] Hiperparâmetros do classificador
+- [ ] Análise comparativa dos resultados obtidos nos testes, com exemplos de erros e acertos dos métodos
+- [ ] Referências Bibliográficas
