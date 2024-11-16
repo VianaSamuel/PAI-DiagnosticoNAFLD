@@ -158,13 +158,13 @@ Haralick & *Local Binary Pattern*)*
 <br>
 
 ## 14. Documentação
-- [ ] Descrição do problema
-- [ ] Descrição das técnicas implementadas para a solução (classificadores e características)
+- [x] Descrição do problema
+- [+/-] Descrição das técnicas implementadas para a solução (classificadores e características)
 - [ ] Descrição dos dados
-- [ ] Referências das bibliotecas utilizadas na implementação
+- [x] Referências das bibliotecas utilizadas na implementação
 - [ ] Medidas de tempo de execução para:
   - [ ] Diversas imagens
   - [ ] Descritores
   - [ ] Hiperparâmetros do classificador
 - [ ] Análise comparativa dos resultados obtidos nos testes, com exemplos de erros e acertos dos métodos
-- [ ] Referências Bibliográficas
+- [x] Referências Bibliográficas
