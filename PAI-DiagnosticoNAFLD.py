@@ -8,6 +8,9 @@ subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
 subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
 subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
 subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-image"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "xgboost"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-learn"])
+subprocess.check_call([sys.executable, "-m", "pip", "install", "pandas"])
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -19,6 +22,12 @@ from PIL import Image
 import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.widgets import Button, RectangleSelector
+import xgboost as xgb
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
+from sklearn.preprocessing import LabelEncoder
+from xgboost import XGBClassifier
+import pandas as pd
 
 
 
@@ -291,19 +300,35 @@ def soma_angulos(glcms): # a glcm vem dividida para cada raio e angulo. aqui a g
 
 
 
+# #=============== CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
+# def calcula_lbps(roi): # retorna um vetor no formato [raio_lbp][descritor][raio_glcm][i][j]
+#     print("lbps")
+#     raios = [1, 2, 4, 8]
+#     num_vizinhos = 8
+#     lbps = []
+#     for raio in raios:
+#         print(f"calculando lbp raio: {raio}")
+#         lbp = skimage.feature.local_binary_pattern(np.array(roi), num_vizinhos, raio, method='uniform')  # cálculo do LBP
+#         lbp = lbp.astype(np.uint8) # conversão de LBP para inteiros (para obter histograma)
+#         print("descritores")
+#         descritores_lbp = glcm_biblioteca(lbp)
+#         lbps.append(descritores_lbp)
+#     return lbps
+# #=============== FIM CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
+
+
 #=============== CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
-def calcula_lbps(roi): # retorna um vetor no formato [raio_lbp][descritor][raio_glcm][i][j]
+def calcula_lbp(roi): # retorna um vetor no formato [raio (só tem 1)][descritor][raio_glcm][i][j]
     print("lbps")
-    raios = [1, 2, 4, 8]
+    raio = 1
     num_vizinhos = 8
     lbps = []
-    for raio in raios:
-        print(f"calculando lbp raio: {raio}")
-        lbp = skimage.feature.local_binary_pattern(np.array(roi), num_vizinhos, raio, method='uniform')  # cálculo do LBP
-        lbp = lbp.astype(np.uint8) # conversão de LBP para inteiros (para obter histograma)
-        print("descritores")
-        descritores_lbp = glcm_biblioteca(lbp)
-        lbps.append(descritores_lbp)
+    print("calculando lbp")
+    lbp = skimage.feature.local_binary_pattern(np.array(roi), num_vizinhos, raio, method='uniform')  # cálculo do LBP
+    lbp = lbp.astype(np.uint8) # conversão de LBP para inteiros (para obter histograma)
+    print("descritores")
+    descritores_lbp = glcm_biblioteca(lbp)
+    lbps.append(descritores_lbp)
     return lbps
 #=============== FIM CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
 
@@ -384,38 +409,14 @@ def gerar_planilha_classificador():
                       "roi_homogeneidade_2",
                       "roi_homogeneidade_4",
                       "roi_homogeneidade_8",
-                      "lbp_1_entropia_1",
-                      "lbp_1_entropia_2",
-                      "lbp_1_entropia_4",
-                      "lbp_1_entropia_8",
-                      "lbp_1_energia_1",
-                      "lbp_1_energia_2",
-                      "lbp_1_energia_4",
-                      "lbp_1_energia_8",
-                      "lbp_2_entropia_1",
-                      "lbp_2_entropia_2",
-                      "lbp_2_entropia_4",
-                      "lbp_2_entropia_8",
-                      "lbp_2_energia_1",
-                      "lbp_2_energia_2",
-                      "lbp_2_energia_4",
-                      "lbp_2_energia_8",
-                      "lbp_4_entropia_1",
-                      "lbp_4_entropia_2",
-                      "lbp_4_entropia_4",
-                      "lbp_4_entropia_8",
-                      "lbp_4_energia_1",
-                      "lbp_4_energia_2",
-                      "lbp_4_energia_4",
-                      "lbp_4_energia_8",
-                      "lbp_8_entropia_1",
-                      "lbp_8_entropia_2",
-                      "lbp_8_entropia_4",
-                      "lbp_8_entropia_8",
-                      "lbp_8_energia_1",
-                      "lbp_8_energia_2",
-                      "lbp_8_energia_4",
-                      "lbp_8_energia_8",
+                      "lbp_entropia_1",
+                      "lbp_entropia_2",
+                      "lbp_entropia_4",
+                      "lbp_entropia_8",
+                      "lbp_energia_1",
+                      "lbp_energia_2",
+                      "lbp_energia_4",
+                      "lbp_energia_8",
                       ])
 
     rois = carrega_rois()
@@ -427,7 +428,7 @@ def gerar_planilha_classificador():
         # calcula descritores
         descritores = glcm_biblioteca(roi[0])
         # calcula lbp e seus descritores
-        lbps = calcula_lbps(roi[0])
+        lbp = calcula_lbp(roi[0])
         # classe do paciente - 0: saudável, 1: doente
         idx_paciente = int(roi[1].split("_")[1])
         classe_paciente = 0 if idx_paciente <= 16 else 1
@@ -442,38 +443,14 @@ def gerar_planilha_classificador():
                           descritores[2][1],
                           descritores[2][2],
                           descritores[2][3],
-                          lbps[0][1][0],
-                          lbps[0][1][1],
-                          lbps[0][1][2],
-                          lbps[0][1][3],
-                          lbps[0][3][0],
-                          lbps[0][3][1],
-                          lbps[0][3][2],
-                          lbps[0][3][3],
-                          lbps[1][1][0],
-                          lbps[1][1][1],
-                          lbps[1][1][2],
-                          lbps[1][1][3],
-                          lbps[1][3][0],
-                          lbps[1][3][1],
-                          lbps[1][3][2],
-                          lbps[1][3][3],
-                          lbps[2][1][0],
-                          lbps[2][1][1],
-                          lbps[2][1][2],
-                          lbps[2][1][3],
-                          lbps[2][3][0],
-                          lbps[2][3][1],
-                          lbps[2][3][2],
-                          lbps[2][3][3],
-                          lbps[3][1][0],
-                          lbps[3][1][1],
-                          lbps[3][1][2],
-                          lbps[3][1][3],
-                          lbps[3][3][0],
-                          lbps[3][3][1],
-                          lbps[3][3][2],
-                          lbps[3][3][3]
+                          lbp[0][1][0],
+                          lbp[0][1][1],
+                          lbp[0][1][2],
+                          lbp[0][1][3],
+                          lbp[0][3][0],
+                          lbp[0][3][1],
+                          lbp[0][3][2],
+                          lbp[0][3][3]
                         ])
 
 
@@ -918,7 +895,7 @@ def janela_rois_e_histogramas(vetor_rois=None, idx_roi=-1, roi_atual=None, titul
 
 
 #=============== JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
-def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, descritores=None, descritores_lbps=None):
+def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, descritores=None, descritores_lbp=None):
     descritores = []
     existe_texto = False
     def prepara_a_tela():
@@ -929,29 +906,39 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, desc
             roi_atual = vetor_rois[idx_roi]
             calcula_descritores()
             texto_descritores =  f"ROI: {idx_roi}\n\n"
-            texto_descritores_lbp = ""
+            texto_descritores_lbp = f"Descritores LBP: "
             if len(descritores) <= 0:
                 tk.messagebox.showerror("Erro", "Zero descritores.")
                 return
             for idx_raio in range(len(descritores[0])): # descritores = [descritor][raio]
+                # descritores normais
                 raio = 2**idx_raio
                 entropia = descritores[1][idx_raio]
                 homogeneidade = descritores[2][idx_raio]
                 texto_descritores += f"Raio {raio}:\n"
                 texto_descritores += f"Homogeneidade: {homogeneidade}\n"
                 texto_descritores += f"Entropia: {entropia}\n\n"
-            texto_descritores_lbp += f"Descritores LBP: "
-            for idx_raio_lbp in range(len(descritores_lbps)): # descritores_lbp = [raio_lbp][descritor][raio]
-                raio_lbp = 2**idx_raio_lbp
-                texto_descritores_lbp += f"\n\nRaio {raio_lbp}:\n"
-                entropias = descritores_lbps[idx_raio_lbp][1]
-                energias = descritores_lbps[idx_raio_lbp][3]
-                texto_descritores_lbp += "Entropia: "
-                for i in entropias:
-                    texto_descritores_lbp += f"{i:.2f} / "
-                texto_descritores_lbp += "\nEnergia: "
-                for i in energias:
-                    texto_descritores_lbp += f"{i:.2f} / "
+                # descritores lbp
+                texto_descritores_lbp += f"\n\nRaio {raio}:\n"
+                # entropias = descritores_lbp[0][1]
+                # energias = descritores_lbp[0][3]
+                texto_descritores_lbp += f"Entropia: {descritores_lbp[0][1][idx_raio]}"
+                # for i in entropias:
+                #     texto_descritores_lbp += f"{i:.2f} / "
+                texto_descritores_lbp += f"\nEnergia: {descritores_lbp[0][3][idx_raio]}"
+                # for i in energias:
+                #     texto_descritores_lbp += f"{i:.2f} / "
+            # for idx_raio_lbp in range(len(descritores_lbp)): # descritores_lbp = [raio_lbp][descritor][raio]
+            #     raio_lbp = 2**idx_raio_lbp
+            #     texto_descritores_lbp += f"\n\nRaio {raio_lbp}:\n"
+            #     entropias = descritores_lbp[idx_raio_lbp][1]
+            #     energias = descritores_lbp[idx_raio_lbp][3]
+            #     texto_descritores_lbp += "Entropia: "
+            #     for i in entropias:
+            #         texto_descritores_lbp += f"{i:.2f} / "
+            #     texto_descritores_lbp += "\nEnergia: "
+            #     for i in energias:
+            #         texto_descritores_lbp += f"{i:.2f} / "
             if existe_texto:
                 # se o objeto do texto existir, só renomeia
                 ax.texts[0].set_text(texto_descritores)
@@ -982,11 +969,11 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, desc
         prepara_a_tela()
 
     def calcula_descritores():
-        nonlocal roi_atual, descritores, descritores_lbps
+        nonlocal roi_atual, descritores, descritores_lbp
         imagem_roi = roi_atual[0]
         nome_arquivo_roi = roi_atual[1]
         descritores = glcm_biblioteca(imagem_roi)
-        descritores_lbps = calcula_lbps(imagem_roi)
+        descritores_lbp = calcula_lbp(imagem_roi)
     
     def on_key(event): # trocar de roi via setas do teclado
         if event.key == 'right':
@@ -1017,6 +1004,84 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, desc
 #=============== FIM JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
 
 
+# xgboost
+def roda_xgboost():
+    csv = 'planilha_pra_uso_no_classificador.csv'
+    df = pd.read_csv(csv)
+    resultados_xgboost = cross_validation_xgboost(df)
+    imprimir_resultados(resultados_xgboost)
+
+####################################### TEMPORARIA #######################################
+####################################### TEMPORARIA #######################################
+####################################### TEMPORARIA #######################################
+def imprimir_resultados(resultados):
+    print("Resultados da Validação Cruzada:")
+    print(f"Acurácia média: {np.mean(resultados['acuracia']):.4f} ± {np.std(resultados['acuracia']):.4f}")
+    print(f"Especificidade média: {np.mean(resultados['especificidade']):.4f} ± {np.std(resultados['especificidade']):.4f}")
+    print(f"Sensibilidade média: {np.mean(resultados['sensibilidade']):.4f} ± {np.std(resultados['sensibilidade']):.4f}")
+    matriz_agregada = np.sum(resultados['matriz_confusao'], axis=0)
+    print("\nMatriz de Confusão Agregada:")
+    print(matriz_agregada)
+####################################### TEMPORARIA #######################################
+####################################### TEMPORARIA #######################################
+####################################### TEMPORARIA #######################################
+
+
+def preparar_dados(df):
+    # separa X e y em características e rótulos
+    X = df.iloc[:, 2:] # matriz com tudo depois da classe
+    y = df['classe'] # só a classe
+    return X, y
+
+# faz a cross validation, rotacionando pacientes como o conjunto teste, e roda o classificador raso xgboost
+def cross_validation_xgboost(df, num_pacientes=55):
+    metricas = {
+        'acuracia': [],
+        'especificidade': [],
+        'sensibilidade': [],
+        'matriz_confusao': []
+    }
+    
+    # Percorrer todos os pacientes como conjunto de teste
+    for paciente_teste in range(num_pacientes):
+        # separa treino e teste com apenas 1 paciente como teste
+        str_paciente = ""
+        if paciente_teste < 10:
+            str_paciente = "0" + str(paciente_teste)
+        else:
+            str_paciente = str(paciente_teste)
+        df_teste = df[df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
+        df_treino = df[~df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
+        
+        X_treino, y_treino = preparar_dados(df_treino)
+        X_teste, y_teste = preparar_dados(df_teste)
+        
+        # executa o treinamento do xgboost e faz a predição do conjunto de teste
+        classificador = XGBClassifier(
+            use_label_encoder=False, 
+            eval_metric='logloss'
+        )
+        classificador.fit(X_treino, y_treino)
+        y_pred = classificador.predict(X_teste)
+        
+        # acha as métricas
+        matriz_confusao = confusion_matrix(y_teste, y_pred, labels=[0, 1])
+        metricas['matriz_confusao'].append(matriz_confusao)
+        metricas['acuracia'].append(accuracy_score(y_teste, y_pred))
+
+        # faz a especificidade e sensibilidade na mão
+        verdadeiro_negativo, falso_positivo, falso_negativo, verdadeiro_positivo = matriz_confusao.ravel()
+        especificidade = 0
+        sensibilidade = 0
+        if (verdadeiro_negativo + falso_positivo) > 0: # trata divisão por 0
+            especificidade = verdadeiro_negativo / (verdadeiro_negativo + falso_positivo)
+        metricas['especificidade'].append(especificidade)
+        if (verdadeiro_positivo + falso_negativo) > 0:
+            sensibilidade = verdadeiro_positivo / (verdadeiro_positivo + falso_negativo)
+        metricas['sensibilidade'].append(sensibilidade)
+    
+    return metricas
+
 
 #=============== GUI ===============#
 def menu_principal():
@@ -1045,7 +1110,7 @@ def menu_principal():
     btn3.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
     btn4 = tk.Button(menu_principal, text="Salvar (Características [Haralick + LBPs]) em Planilha .CSV", command=gerar_planilha_classificador, width=50, height=2)
     btn4.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
-    btn5 = tk.Button(menu_principal, text="Classificar (Imagem) (2ª PARTE)", width=50, height=2)
+    btn5 = tk.Button(menu_principal, text="Classificar (Imagem) (2ª PARTE)", command=roda_xgboost, width=50, height=2)
     btn5.grid(row=5, column=0, padx=10, pady=10, sticky="nsew")
 
     # nomes e matrículas
