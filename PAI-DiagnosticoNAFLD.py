@@ -11,6 +11,9 @@ import sys
 # subprocess.check_call([sys.executable, "-m", "pip", "install", "xgboost"])
 # subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-learn"])
 # subprocess.check_call([sys.executable, "-m", "pip", "install", "pandas"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "setuptools"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "tensorflow"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "keras"])
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -24,11 +27,19 @@ from tkinter import ttk, filedialog
 from matplotlib.widgets import Button, RectangleSelector
 import xgboost as xgb
 from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 import pandas as pd
 import time
+import tensorflow as tf
+import keras as k
+from keras import *
+from tensorflow import *
+from tensorflow.keras.applications import MobileNetV2
+from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
+from tensorflow.keras.models import Model
+from keras.utils import to_categorical
 
 
 
@@ -1082,6 +1093,97 @@ def cross_validation_xgboost(df):
 #=============== FIM BOTÃO 5 (Classificador Raso - XGBoost) ===============#
 
 
+
+
+
+
+
+
+# mobilenet 
+def roda_mobilenet():
+    # prepara os dataframes
+    csv = 'planilha_pra_uso_no_classificador.csv'
+    df = pd.read_csv(csv)
+
+    vetor_rois = carrega_rois()
+    dicionario_rois = {nome: imagem for imagem, nome in vetor_rois}
+    X_teste = None
+    y_teste = None
+    X_treino = None
+    y_treino = None
+
+    def prepara_treino_teste(paciente_teste):
+        nonlocal X_teste, y_teste, X_treino, y_treino
+        str_paciente = ""
+        if paciente_teste < 10:
+            str_paciente = "0" + str(paciente_teste)
+        else:
+            str_paciente = str(paciente_teste)
+        df_teste = df[df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
+        df_treino = df[~df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
+
+        # pega a imagem do dicionario de rois e roda ela pelo preprocessamento, depois salva no X.
+        X_teste = np.array([ preprocessamento_mobilenet( dicionario_rois[ row['nome_arquivo']]) for _, row in df_teste.iterrows()])
+        y_teste = df_teste['classe']
+        X_treino = np.array([ preprocessamento_mobilenet( dicionario_rois[ row['nome_arquivo']]) for _, row in df_treino.iterrows()])
+        y_treino = df_treino['classe']
+
+
+    # pega o modelo pré-treinado
+    modelo_base = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+    for camada in modelo_base.layers: # as camadas treinadas pelo imagenet não devem ser treinadas novamente
+        camada.trainable = False
+    
+    # adiciona as camadas treináveis para fazer o fine-tuning
+    modelo_temp = modelo_base.output # começa pela última do outro modelo
+    modelo_temp = GlobalAveragePooling2D()(modelo_temp) # pooling 
+    modelo_temp = Dense(200, activation='relu')(modelo_temp) # adiciona outra camada densa
+    modelo_temp = Dropout(0.5)(modelo_temp) # desliga alguns nós para evitar overfitting
+    saida_modelo_temp = Dense(2, activation='softmax')(modelo_temp) # saída com 2 classes (saudável/esteatose)
+    modelo_final = Model(inputs=modelo_base.input, outputs=saida_modelo_temp)
+
+    # roda o cross validation
+    historicos = []
+    matrizes_confusao = []
+    relatorios = []
+    for paciente_teste in range(55):
+        prepara_treino_teste(paciente_teste)
+        y_treino_cat = to_categorical(y_treino)  if y_treino.size > 0 else y_treino # one hot encoder
+        y_teste_cat = to_categorical(y_teste) if y_teste.size > 0 else y_teste
+        if y_treino.size == 0 or y_teste.size == 0:
+            print(f"Não há dados suficientes para o paciente {paciente_teste}.")
+            print(f"Treino: {y_treino.size} Teste: {y_teste.size}")
+            print()
+            input()
+        modelo_final.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy']) # loss: categorical_crossentropy, sparse_categorical_crossentropy, mse
+        callbacks = [callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)] # para o treino se a função não melhorar
+        historicos.append(modelo_final.fit(X_treino, y_treino_cat, epochs=5, batch_size=32, validation_data=(X_teste, y_teste_cat))) # salva o histórico do treino para plotar depois
+        y_previsto = modelo_final.predict(X_teste) # faz os testes
+        y_previsto = np.argmax(y_previsto, axis=1) # a classe com maior probabilidade é a previsão
+        relatorios.append(classification_report(y_teste, y_previsto))
+        matrizes_confusao.append(confusion_matrix(y_teste, y_previsto))
+
+    # imprime resultados
+    for i, relatorio in enumerate(relatorios):
+        print(f"\n\nPaciente {i+1}:\n{relatorio}")
+        print(f"Matriz de Confusão:\n{matrizes_confusao[i]}")
+        print(f"Histórico de Treino:\n{historicos[i].history}\n\n")
+
+
+
+def preprocessamento_mobilenet(imagem_vetor):
+    imagem = np.array(imagem_vetor, dtype=np.uint8)
+    imagem = tf.expand_dims(imagem, axis=-1)
+    imagem = tf.image.resize(imagem, (224, 224))
+    imagem = tf.image.grayscale_to_rgb(imagem)
+    imagem = k.applications.imagenet_utils.preprocess_input(imagem) # normaliza a imagem
+    return imagem
+
+
+
+
+
+
 #=============== GUI ===============#
 def menu_principal():
     # config: janela, resolução, estilização
@@ -1111,7 +1213,7 @@ def menu_principal():
     btn4.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
     btn5 = tk.Button(menu_principal, text="Classificador Raso (XGBoost)", command=roda_xgboost, width=50, height=2)
     btn5.grid(row=5, column=0, padx=10, pady=10, sticky="nsew")
-    btn6 = tk.Button(menu_principal, text="Classificador Profundo (***)", width=50, height=2)
+    btn6 = tk.Button(menu_principal, text="Classificador Profundo (MobileNet)", command=roda_mobilenet, width=50, height=2)
     btn6.grid(row=6, column=0, padx=10, pady=10, sticky="nsew")
 
     # nomes e matrículas
