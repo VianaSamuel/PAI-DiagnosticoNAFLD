@@ -121,23 +121,24 @@ Projeto da matéria de Processamento e Análise de Imagens para diagnóstico de 
 
 ## 10. Divisão de Dados para Validação Cruzada:
 *(Repetir 55 vezes, validação cruzada):*
-- [ ] Separar conjuntos:
-  - [ ] Teste: 10 imagens de UM paciente
-  - [ ] Treino: Demais imagens
-- [ ] Treinar e testar classificadores com essa divisão
-- [ ] Escolher o próximo paciente para ser o conjunto de teste
+- [x] Separar conjuntos:
+  - [x] Teste: 10 imagens de UM paciente
+  - [x] Treino: Demais imagens
+- [x] Treinar e testar classificadores com essa divisão
+- [x] Escolher o próximo paciente para ser o conjunto de teste
 
 <br>
 
 ## 11. Implementação do Classificador Binário Raso
 *(Características usadas como entrada para os classificadores:<br>Descritores de
 Haralick & *Local Binary Pattern*)*
-- [ ] Implementar o *XGBoost*
-- [ ] Avaliar médias:
-  - [ ] Acurácia
-  - [ ] Especificidade
-  - [ ] Sensibilidade
-- [ ] Exibir matriz de confusão após a validação cruzada 
+- [x] Implementar o *XGBoost*
+- [x] Avaliar médias:
+  - [x] Acurácia
+  - [x] Especificidade
+  - [x] Sensibilidade
+- [x] Exibir matriz de confusão após a validação cruzada 
+- [x] Cálculo de tempo de execução
 
 <br>
 
@@ -148,6 +149,7 @@ Haralick & *Local Binary Pattern*)*
 - [ ] Avaliar:
   - [ ] Acurácia
 - [ ] Exibir matriz de confusão de cada uma após a validação cruzada
+- [ ] Cálculo de tempo de execução
 - [ ] Plotar os gráficos de aprendizado médios (acurácia de treino e teste após cada época)
 
 <br>

@@ -4,13 +4,13 @@
 # instalando bibliotecas necessárias
 import subprocess
 import sys
-subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-image"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "xgboost"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-learn"])
-subprocess.check_call([sys.executable, "-m", "pip", "install", "pandas"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "numpy"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "scipy"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-image"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "xgboost"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "scikit-learn"])
+# subprocess.check_call([sys.executable, "-m", "pip", "install", "pandas"])
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,11 +23,12 @@ import tkinter as tk
 from tkinter import ttk, filedialog
 from matplotlib.widgets import Button, RectangleSelector
 import xgboost as xgb
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import confusion_matrix, accuracy_score, precision_score, recall_score
 from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 import pandas as pd
+import time
 
 
 
@@ -1004,46 +1005,26 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, desc
 #=============== FIM JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
 
 
-# xgboost
+#=============== BOTÃO 5 (Classificador Raso - XGBoost) ===============#
 def roda_xgboost():
     csv = 'planilha_pra_uso_no_classificador.csv'
     df = pd.read_csv(csv)
     resultados_xgboost = cross_validation_xgboost(df)
-    imprimir_resultados(resultados_xgboost)
+    print("\n55 rodadas de testes para cross validation concluídas. Resultados médios:")
+    print(f" - Acurácia        {resultados_xgboost[0]:.2f}")
+    print(f" - Especificidade  {resultados_xgboost[1]:.2f}")
+    print(f" - Sensibilidade   {resultados_xgboost[2]:.2f}")
+    print(f"\nMatriz de Confusão:\n{np.sum(resultados_xgboost[3], axis=0)}")
 
-####################################### TEMPORARIA #######################################
-####################################### TEMPORARIA #######################################
-####################################### TEMPORARIA #######################################
-def imprimir_resultados(resultados):
-    print("Resultados da Validação Cruzada:")
-    print(f"Acurácia média: {np.mean(resultados['acuracia']):.4f} ± {np.std(resultados['acuracia']):.4f}")
-    print(f"Especificidade média: {np.mean(resultados['especificidade']):.4f} ± {np.std(resultados['especificidade']):.4f}")
-    print(f"Sensibilidade média: {np.mean(resultados['sensibilidade']):.4f} ± {np.std(resultados['sensibilidade']):.4f}")
-    matriz_agregada = np.sum(resultados['matriz_confusao'], axis=0)
-    print("\nMatriz de Confusão Agregada:")
-    print(matriz_agregada)
-####################################### TEMPORARIA #######################################
-####################################### TEMPORARIA #######################################
-####################################### TEMPORARIA #######################################
-
-
-def preparar_dados(df):
-    # separa X e y em características e rótulos
-    X = df.iloc[:, 2:] # matriz com tudo depois da classe
-    y = df['classe'] # só a classe
-    return X, y
 
 # faz a cross validation, rotacionando pacientes como o conjunto teste, e roda o classificador raso xgboost
-def cross_validation_xgboost(df, num_pacientes=55):
-    metricas = {
-        'acuracia': [],
-        'especificidade': [],
-        'sensibilidade': [],
-        'matriz_confusao': []
-    }
+def cross_validation_xgboost(df):
+    metricas = [0, 0, 0, []] # acuracia, especificidade, sensibilidade, matriz_confusao
+    resultados = [0, 0, 0, 0] # verdadeiro_negativo, falso_positivo, falso_negativo, verdadeiro_positivo
+    hiperparametros = { 'learning_rate': [0.01, 0.1, 0.3], 
+                        'max_depth': [3, 6] }
     
-    # Percorrer todos os pacientes como conjunto de teste
-    for paciente_teste in range(num_pacientes):
+    for i, paciente_teste in enumerate(range(55)):
         # separa treino e teste com apenas 1 paciente como teste
         str_paciente = ""
         if paciente_teste < 10:
@@ -1053,34 +1034,52 @@ def cross_validation_xgboost(df, num_pacientes=55):
         df_teste = df[df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
         df_treino = df[~df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
         
-        X_treino, y_treino = preparar_dados(df_treino)
-        X_teste, y_teste = preparar_dados(df_teste)
+        # separa os dataframes em X sendo atributos e y a classe
+        X_treino = df_treino.iloc[:, 2:] # matriz com tudo depois da classe
+        X_teste = df_teste.iloc[:, 2:]
+        y_treino = df_treino['classe'] # só a classe
+        y_teste = df_teste['classe']
+
+        X_treino = X_treino.to_numpy()
+        X_teste = X_teste.to_numpy()
+        y_treino = y_treino.to_numpy()
+        y_teste = y_teste.to_numpy()
         
-        # executa o treinamento do xgboost e faz a predição do conjunto de teste
-        classificador = XGBClassifier(
-            use_label_encoder=False, 
-            eval_metric='logloss'
-        )
-        classificador.fit(X_treino, y_treino)
-        y_pred = classificador.predict(X_teste)
+        # executa o treinamento do xgboost, roda o grid search, e faz a predição do conjunto de teste
+        #   parâmetro device setado para fazer rodar em paralelo na gpu
+        classificador = XGBClassifier(eval_metric='logloss') 
+        gridsearch = GridSearchCV(estimator=classificador, param_grid=hiperparametros, cv=3, scoring='accuracy')
+        inicio_cronometro = time.time() # conta o tempo do treino
+        #classificador.fit(X_treino, y_treino)
+        gridsearch.fit(X_treino, y_treino)
+        fim_cronometro = time.time()
+        print(f"Treino {i} levou {fim_cronometro - inicio_cronometro:.2f} segundos")
+        #y_pred = classificador.predict(X_teste)
+        y_pred = gridsearch.predict(X_teste)
         
         # acha as métricas
         matriz_confusao = confusion_matrix(y_teste, y_pred, labels=[0, 1])
-        metricas['matriz_confusao'].append(matriz_confusao)
-        metricas['acuracia'].append(accuracy_score(y_teste, y_pred))
+        metricas[3].append(matriz_confusao)
 
         # faz a especificidade e sensibilidade na mão
         verdadeiro_negativo, falso_positivo, falso_negativo, verdadeiro_positivo = matriz_confusao.ravel()
-        especificidade = 0
-        sensibilidade = 0
-        if (verdadeiro_negativo + falso_positivo) > 0: # trata divisão por 0
-            especificidade = verdadeiro_negativo / (verdadeiro_negativo + falso_positivo)
-        metricas['especificidade'].append(especificidade)
-        if (verdadeiro_positivo + falso_negativo) > 0:
-            sensibilidade = verdadeiro_positivo / (verdadeiro_positivo + falso_negativo)
-        metricas['sensibilidade'].append(sensibilidade)
+        resultados[0] += verdadeiro_negativo
+        resultados[1] += falso_positivo
+        resultados[2] += falso_negativo
+        resultados[3] += verdadeiro_positivo
+    
+    # faz as métricas na mão, contando a soma dos valores de todas as rodadas
+    total = resultados[0] + resultados[1] + resultados[2] + resultados[3]
+    acuracia = (resultados[0] + resultados[3]) / total
+    metricas[0] = acuracia
+    especificidade = resultados[0] / (resultados[0] + resultados[1])
+    metricas[1] = especificidade
+    sensibilidade = resultados[3] / (resultados[3] + resultados[2])
+    metricas[2] = sensibilidade
+    
     
     return metricas
+#=============== FIM BOTÃO 5 (Classificador Raso - XGBoost) ===============#
 
 
 #=============== GUI ===============#
@@ -1088,7 +1087,7 @@ def menu_principal():
     # config: janela, resolução, estilização
     root = tk.Tk()
     root.title("PAI-DIagnosticoNAFLD")
-    root.geometry("400x500")
+    root.geometry("400x515")
     style = ttk.Style()
     style.theme_use('clam')
 
@@ -1110,14 +1109,16 @@ def menu_principal():
     btn3.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
     btn4 = tk.Button(menu_principal, text="Salvar (Características [Haralick + LBPs]) em Planilha .CSV", command=gerar_planilha_classificador, width=50, height=2)
     btn4.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
-    btn5 = tk.Button(menu_principal, text="Classificar (Imagem) (2ª PARTE)", command=roda_xgboost, width=50, height=2)
+    btn5 = tk.Button(menu_principal, text="Classificador Raso (XGBoost)", command=roda_xgboost, width=50, height=2)
     btn5.grid(row=5, column=0, padx=10, pady=10, sticky="nsew")
+    btn6 = tk.Button(menu_principal, text="Classificador Profundo (***)", width=50, height=2)
+    btn6.grid(row=6, column=0, padx=10, pady=10, sticky="nsew")
 
     # nomes e matrículas
     pedro = tk.Label(menu_principal, text="Pedro Corrêa Rigotto (762281)", anchor="center")
-    pedro.grid(row=6, column=0, pady=(20, 0), sticky="nsew")
+    pedro.grid(row=7, column=0, pady=(20, 0), sticky="nsew")
     samuel = tk.Label(menu_principal, text="Samuel Luiz da Cunha Viana Cruz (762496)", anchor="center")
-    samuel.grid(row=7, column=0, pady=(0, 10), sticky="nsew")
+    samuel.grid(row=8, column=0, pady=(0, 10), sticky="nsew")
     
     root.mainloop()
 #=============== FIM GUI ===============#
