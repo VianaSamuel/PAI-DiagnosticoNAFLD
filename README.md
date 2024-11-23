@@ -144,12 +144,12 @@ Haralick & *Local Binary Pattern*)*
 
 ## 12. Implementação do Classificador Profundo
 *(Entradas para os classificadores: ROIs recortadas)*
-- [ ] Implementar o *MobileNet*
-- [ ] Ajustar os pesos já disponíveis nas bibliotecas que foram treinados com o ImageNet (*fine tunning*)
-- [ ] Avaliar:
-  - [ ] Acurácia
-- [ ] Exibir matriz de confusão de cada uma após a validação cruzada
-- [ ] Cálculo de tempo de execução
+- [x] Implementar o *MobileNet*
+- [x] Ajustar os pesos já disponíveis nas bibliotecas que foram treinados com o ImageNet (*fine tunning*)
+- [x] Avaliar:
+  - [x] Acurácia
+- [x] Exibir matriz de confusão de cada uma após a validação cruzada
+- [x] Cálculo de tempo de execução
 - [ ] Plotar os gráficos de aprendizado médios (acurácia de treino e teste após cada época)
 
 <br>
