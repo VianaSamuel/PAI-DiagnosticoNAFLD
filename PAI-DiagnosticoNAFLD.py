@@ -38,6 +38,7 @@ from keras import *
 from tensorflow import *
 from tensorflow.keras.applications import MobileNetV2
 from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
+from tensorflow.keras.regularizers import l2
 from tensorflow.keras.models import Model
 from keras.utils import to_categorical
 
@@ -1115,12 +1116,17 @@ def roda_mobilenet():
     def prepara_treino_teste(paciente_teste):
         nonlocal X_teste, y_teste, X_treino, y_treino
         str_paciente = ""
+        # print(f"paciente {paciente_teste}")
         if paciente_teste < 10:
-            str_paciente = "0" + str(paciente_teste)
+            str_paciente = "0" + str(int(paciente_teste))
         else:
-            str_paciente = str(paciente_teste)
+            str_paciente = str(int(paciente_teste))
+        # print(f"str paciente {str_paciente}")
         df_teste = df[df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
+        # print(f"dfteste {df_teste}")
         df_treino = df[~df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
+        # print(f"dftreino {df_treino}")
+        # input()
 
         # pega a imagem do dicionario de rois e roda ela pelo preprocessamento, depois salva no X.
         X_teste = np.array([ preprocessamento_mobilenet( dicionario_rois[ row['nome_arquivo']]) for _, row in df_teste.iterrows()])
@@ -1137,37 +1143,53 @@ def roda_mobilenet():
     # adiciona as camadas treináveis para fazer o fine-tuning
     modelo_temp = modelo_base.output # começa pela última do outro modelo
     modelo_temp = GlobalAveragePooling2D()(modelo_temp) # pooling 
-    modelo_temp = Dense(200, activation='relu')(modelo_temp) # adiciona outra camada densa
+    modelo_temp = Dense(100, activation='relu', kernel_regularizer=l2(0.01))(modelo_temp) # adiciona outra camada densa. inclui um regularizador para evitar overfitting
     modelo_temp = Dropout(0.5)(modelo_temp) # desliga alguns nós para evitar overfitting
     saida_modelo_temp = Dense(2, activation='softmax')(modelo_temp) # saída com 2 classes (saudável/esteatose)
     modelo_final = Model(inputs=modelo_base.input, outputs=saida_modelo_temp)
+
+    # define algumas coisas primeiro
+    modelo_final.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy']) # loss: categorical_crossentropy, sparse_categorical_crossentropy, mse
+    var_callbacks = [callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)] # para o treino se a função não melhorar
+    pesos_das_classes = {0: 1.0, 1: 2.0} # peso maior para a classe 1 (esteatose), porque tem menos dados
 
     # roda o cross validation
     historicos = []
     matrizes_confusao = []
     relatorios = []
-    for paciente_teste in range(55):
+    inicio_cronometro = time.time() # conta o tempo do treino
+    pacientes = list(range(55)) # faz o paciente a ser o conjunto de teste um paciente aleatório, para não ter viés sobre a ordem do conjunto teste
+    rng = np.random.default_rng(seed=int(time.time()))
+    rng.shuffle(pacientes)
+    for _ in range(55):
+        paciente_teste = pacientes.pop()
         prepara_treino_teste(paciente_teste)
+        # USAR TO_CATEGORICAL SE TROCAR PARA CATEGORICAL_CROSSENTROPY. trocar apenas no modelo_final.fit
         y_treino_cat = to_categorical(y_treino)  if y_treino.size > 0 else y_treino # one hot encoder
         y_teste_cat = to_categorical(y_teste) if y_teste.size > 0 else y_teste
         if y_treino.size == 0 or y_teste.size == 0:
             print(f"Não há dados suficientes para o paciente {paciente_teste}.")
             print(f"Treino: {y_treino.size} Teste: {y_teste.size}")
-            print()
             input()
-        modelo_final.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy']) # loss: categorical_crossentropy, sparse_categorical_crossentropy, mse
-        callbacks = [callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)] # para o treino se a função não melhorar
-        historicos.append(modelo_final.fit(X_treino, y_treino_cat, epochs=5, batch_size=32, validation_data=(X_teste, y_teste_cat))) # salva o histórico do treino para plotar depois
+        historicos.append(modelo_final.fit(X_treino, y_treino_cat, epochs=50, batch_size=32, validation_data=(X_teste, y_teste_cat), callbacks=var_callbacks, class_weight=pesos_das_classes)) # salva o histórico do treino para plotar depois
         y_previsto = modelo_final.predict(X_teste) # faz os testes
         y_previsto = np.argmax(y_previsto, axis=1) # a classe com maior probabilidade é a previsão
-        relatorios.append(classification_report(y_teste, y_previsto))
-        matrizes_confusao.append(confusion_matrix(y_teste, y_previsto))
+        relatorios.append(classification_report(y_teste, y_previsto, zero_division=0))
+        matrizes_confusao.append(confusion_matrix(y_teste, y_previsto, labels=[0, 1]))
+    fim_cronometro = time.time()
+    print(f"\nTreino levou {fim_cronometro - inicio_cronometro:.2f} segundos")
 
     # imprime resultados
-    for i, relatorio in enumerate(relatorios):
-        print(f"\n\nPaciente {i+1}:\n{relatorio}")
-        print(f"Matriz de Confusão:\n{matrizes_confusao[i]}")
-        print(f"Histórico de Treino:\n{historicos[i].history}\n\n")
+    # for i, relatorio in enumerate(relatorios):
+    #     print(f"\n\nPaciente {i+1}:\n{relatorio}")
+    #     print(f"Matriz de Confusão:\n{matrizes_confusao[i]}")
+    #     print(f"Histórico de Treino:\n{historicos[i].history}\n\n")
+
+    with open('resultados_mobilenet.txt', 'w') as arquivo_resultados:
+        for i, relatorio in enumerate(relatorios):
+            arquivo_resultados.write(f"\n\nPaciente {i+1}:\n{relatorio}")
+            arquivo_resultados.write(f"\nMatriz de Confusao:\n{matrizes_confusao[i]}")
+            arquivo_resultados.write(f"\nHistorico de Treino:\n{historicos[i].history}\n\n")
 
 
 
