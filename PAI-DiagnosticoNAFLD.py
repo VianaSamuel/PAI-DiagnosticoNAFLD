@@ -1149,8 +1149,10 @@ def roda_mobilenet():
     modelo_final = Model(inputs=modelo_base.input, outputs=saida_modelo_temp)
 
     # define algumas coisas primeiro
+    epocas = 7
+    paciencia = 3
     modelo_final.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy']) # loss: categorical_crossentropy, sparse_categorical_crossentropy, mse
-    var_callbacks = [callbacks.EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)] # para o treino se a função não melhorar
+    var_callbacks = [callbacks.EarlyStopping(monitor='val_loss', patience=paciencia, restore_best_weights=True)] # para o treino se a função não melhorar
     pesos_das_classes = {0: 1.0, 1: 2.0} # peso maior para a classe 1 (esteatose), porque tem menos dados
 
     # roda o cross validation
@@ -1171,7 +1173,7 @@ def roda_mobilenet():
             print(f"Não há dados suficientes para o paciente {paciente_teste}.")
             print(f"Treino: {y_treino.size} Teste: {y_teste.size}")
             input()
-        historicos.append(modelo_final.fit(X_treino, y_treino_cat, epochs=50, batch_size=32, validation_data=(X_teste, y_teste_cat), callbacks=var_callbacks, class_weight=pesos_das_classes)) # salva o histórico do treino para plotar depois
+        historicos.append(modelo_final.fit(X_treino, y_treino_cat, epochs=epocas, batch_size=32, validation_data=(X_teste, y_teste_cat), callbacks=var_callbacks, class_weight=pesos_das_classes)) # salva o histórico do treino para plotar depois
         y_previsto = modelo_final.predict(X_teste) # faz os testes
         y_previsto = np.argmax(y_previsto, axis=1) # a classe com maior probabilidade é a previsão
         relatorios.append(classification_report(y_teste, y_previsto, zero_division=0))
@@ -1185,6 +1187,7 @@ def roda_mobilenet():
     #     print(f"Matriz de Confusão:\n{matrizes_confusao[i]}")
     #     print(f"Histórico de Treino:\n{historicos[i].history}\n\n")
 
+    # salva resultados em arquivo
     with open('resultados_mobilenet.txt', 'w') as arquivo_resultados:
         for i, relatorio in enumerate(relatorios):
             arquivo_resultados.write(f"\n\nPaciente {i+1}:\n{relatorio}")
