@@ -126,8 +126,9 @@ def prepara_ids(vetor_pacientes, funcao):
 def plota_janela_classificador(classificador):
     janela_classificador = tk.Toplevel()
     janela_classificador.title("Treino do Classificador")
-    janela_classificador.geometry("512x512")
+    janela_classificador.geometry("275x200")
     threading.Thread(target=classificador, args=(janela_classificador,)).start()
+    # classificador(janela_classificador)
 #=============== FIM FUNÇÕES AUXILIARES ===============#
 
 
@@ -1030,10 +1031,12 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, desc
 def roda_xgboost(janela_classificador):
     label_status = ttk.Label(janela_classificador, text="Rodando XGBoost, por favor, aguarde.", wraplength=480, anchor="w", justify="left")
     label_status.pack(pady=30)
-    tempo_total_treino = 0
     csv = 'planilha_pra_uso_no_classificador.csv'
     df = pd.read_csv(csv)
+    inicio_cronometro = time.time() # conta o tempo do treino
     resultados_xgboost = cross_validation_xgboost(df)
+    fim_cronometro = time.time()
+    tempo_total_treino = fim_cronometro - inicio_cronometro
     label_status['text'] = (
         "Resultados:\n"
         f"Acurácia:        {resultados_xgboost[0]:.2f}\n"
@@ -1056,13 +1059,13 @@ def cross_validation_xgboost(df):
     hiperparametros = { 'learning_rate': [0.01, 0.1, 0.3], 
                         'max_depth': [3, 6] }
     
-    for i, paciente_teste in enumerate(range(55)):
+    for paciente_teste in range(55):
         # separa treino e teste com apenas 1 paciente como teste
         str_paciente = ""
         if paciente_teste < 10:
-            str_paciente = "0" + str(paciente_teste)
+            str_paciente = "0" + str(int(paciente_teste))
         else:
-            str_paciente = str(paciente_teste)
+            str_paciente = str(int(paciente_teste))
         df_teste = df[df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
         df_treino = df[~df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
         
@@ -1086,8 +1089,7 @@ def cross_validation_xgboost(df):
         gridsearch.fit(X_treino, y_treino)
         fim_cronometro = time.time()
         tempo_atual_treino = fim_cronometro - inicio_cronometro
-        tempo_total_treino += tempo_atual_treino
-        print(f"Treino {i} levou {tempo_atual_treino:.2f} segundos")
+        print(f"Fold {paciente_teste+1} levou {tempo_atual_treino:.2f} segundos")
         #y_pred = classificador.predict(X_teste)
         y_pred = gridsearch.predict(X_teste)
         
@@ -1154,7 +1156,6 @@ def roda_mobilenet(janela_classificador):
         X_treino = np.array([ preprocessamento_mobilenet( dicionario_rois[ row['nome_arquivo']]) for _, row in df_treino.iterrows()])
         y_treino = df_treino['classe']
 
-
     # pega o modelo pré-treinado
     modelo_base = MobileNetV2(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
     for camada in modelo_base.layers: # as camadas treinadas pelo imagenet não devem ser treinadas novamente
@@ -1201,7 +1202,7 @@ def roda_mobilenet(janela_classificador):
     fim_cronometro = time.time()
     tempo_atual_treino = fim_cronometro - inicio_cronometro
     tempo_total_treino += tempo_atual_treino
-    print(f"Treino {i} levou {tempo_atual_treino:.2f} segundos")
+    print(f"Treino levou {tempo_atual_treino:.2f} segundos")
 
     # imprime resultados
     # for i, relatorio in enumerate(relatorios):
