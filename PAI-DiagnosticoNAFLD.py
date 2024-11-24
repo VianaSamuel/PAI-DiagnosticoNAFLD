@@ -32,6 +32,7 @@ from sklearn.preprocessing import LabelEncoder
 from xgboost import XGBClassifier
 import pandas as pd
 import time
+import threading
 import tensorflow as tf
 import keras as k
 from keras import *
@@ -120,6 +121,13 @@ def prepara_ids(vetor_pacientes, funcao):
         return
     if funcao:
         funcao(vetor_pacientes, idx_paciente, idx_imagem)
+
+# plota a janela para uso dos classificadores
+def plota_janela_classificador(classificador):
+    janela_classificador = tk.Toplevel()
+    janela_classificador.title("Treino do Classificador")
+    janela_classificador.geometry("512x512")
+    threading.Thread(target=classificador, args=(janela_classificador,)).start()
 #=============== FIM FUNÇÕES AUXILIARES ===============#
 
 
@@ -1017,11 +1025,23 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, desc
 #=============== FIM JANELA - BOTÃO 4 (GLCM + descritores de textura) ===============#
 
 
+
 #=============== BOTÃO 5 (Classificador Raso - XGBoost) ===============#
-def roda_xgboost():
+def roda_xgboost(janela_classificador):
+    label_status = ttk.Label(janela_classificador, text="Rodando XGBoost, por favor, aguarde.", wraplength=480, anchor="w", justify="left")
+    label_status.pack(pady=30)
+    tempo_total_treino = 0
     csv = 'planilha_pra_uso_no_classificador.csv'
     df = pd.read_csv(csv)
     resultados_xgboost = cross_validation_xgboost(df)
+    label_status['text'] = (
+        "Resultados:\n"
+        f"Acurácia:        {resultados_xgboost[0]:.2f}\n"
+        f"Especificidade:  {resultados_xgboost[1]:.2f}\n"
+        f"Sensibilidade:   {resultados_xgboost[2]:.2f}\n"
+        f"Matriz de Confusão:\n{np.sum(resultados_xgboost[3], axis=0)}"
+        f"Tempo total de treino: {tempo_total_treino:.2f} segundos"
+    )
     print("\n55 rodadas de testes para cross validation concluídas. Resultados médios:")
     print(f" - Acurácia        {resultados_xgboost[0]:.2f}")
     print(f" - Especificidade  {resultados_xgboost[1]:.2f}")
@@ -1065,7 +1085,9 @@ def cross_validation_xgboost(df):
         #classificador.fit(X_treino, y_treino)
         gridsearch.fit(X_treino, y_treino)
         fim_cronometro = time.time()
-        print(f"Treino {i} levou {fim_cronometro - inicio_cronometro:.2f} segundos")
+        tempo_atual_treino = fim_cronometro - inicio_cronometro
+        tempo_total_treino += tempo_atual_treino
+        print(f"Treino {i} levou {tempo_atual_treino:.2f} segundos")
         #y_pred = classificador.predict(X_teste)
         y_pred = gridsearch.predict(X_teste)
         
@@ -1095,13 +1117,11 @@ def cross_validation_xgboost(df):
 
 
 
-
-
-
-
-
-# mobilenet 
-def roda_mobilenet():
+#=============== BOTÃO 6 (Classificador Profundo - MobileNet) ===============#
+def roda_mobilenet(janela_classificador):
+    label_status = ttk.Label(janela_classificador, text="Rodando MobileNet, por favor, aguarde.", wraplength=480, anchor="w", justify="left")
+    label_status.pack(pady=30)
+    tempo_total_treino = 0
     # prepara os dataframes
     csv = 'planilha_pra_uso_no_classificador.csv'
     df = pd.read_csv(csv)
@@ -1179,7 +1199,9 @@ def roda_mobilenet():
         relatorios.append(classification_report(y_teste, y_previsto, zero_division=0))
         matrizes_confusao.append(confusion_matrix(y_teste, y_previsto, labels=[0, 1]))
     fim_cronometro = time.time()
-    print(f"\nTreino levou {fim_cronometro - inicio_cronometro:.2f} segundos")
+    tempo_atual_treino = fim_cronometro - inicio_cronometro
+    tempo_total_treino += tempo_atual_treino
+    print(f"Treino {i} levou {tempo_atual_treino:.2f} segundos")
 
     # imprime resultados
     # for i, relatorio in enumerate(relatorios):
@@ -1193,6 +1215,10 @@ def roda_mobilenet():
             arquivo_resultados.write(f"\n\nPaciente {i+1}:\n{relatorio}")
             arquivo_resultados.write(f"\nMatriz de Confusao:\n{matrizes_confusao[i]}")
             arquivo_resultados.write(f"\nHistorico de Treino:\n{historicos[i].history}\n\n")
+    label_status['text'] = (
+        f"Resultados salvos em 'resultados_mobilenet.txt'\n"
+        f"Tempo total de treino: {tempo_total_treino:.2f} segundos\n"
+    )
 
 
 
@@ -1203,9 +1229,7 @@ def preprocessamento_mobilenet(imagem_vetor):
     imagem = tf.image.grayscale_to_rgb(imagem)
     imagem = k.applications.imagenet_utils.preprocess_input(imagem) # normaliza a imagem
     return imagem
-
-
-
+#=============== FIM BOTÃO 6 (Classificador Profundo - MobileNet) ===============#
 
 
 
@@ -1236,9 +1260,9 @@ def menu_principal():
     btn3.grid(row=3, column=0, padx=10, pady=10, sticky="nsew")
     btn4 = tk.Button(menu_principal, text="Salvar (Características [Haralick + LBPs]) em Planilha .CSV", command=gerar_planilha_classificador, width=50, height=2)
     btn4.grid(row=4, column=0, padx=10, pady=10, sticky="nsew")
-    btn5 = tk.Button(menu_principal, text="Classificador Raso (XGBoost)", command=roda_xgboost, width=50, height=2)
+    btn5 = tk.Button(menu_principal, text="Classificador Raso (XGBoost)", command=lambda:{plota_janela_classificador(roda_xgboost)}, width=50, height=2)
     btn5.grid(row=5, column=0, padx=10, pady=10, sticky="nsew")
-    btn6 = tk.Button(menu_principal, text="Classificador Profundo (MobileNet)", command=roda_mobilenet, width=50, height=2)
+    btn6 = tk.Button(menu_principal, text="Classificador Profundo (MobileNet)", command=lambda:{plota_janela_classificador(roda_mobilenet)}, width=50, height=2)
     btn6.grid(row=6, column=0, padx=10, pady=10, sticky="nsew")
 
     # nomes e matrículas
