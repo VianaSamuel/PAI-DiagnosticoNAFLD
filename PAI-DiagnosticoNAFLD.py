@@ -45,6 +45,9 @@ from keras.utils import to_categorical
 
 
 
+rois_salva_na_hora = []
+modelo = 0
+
 #=============== PROCESSAMENTO DE IMAGENS ===============#
 #=(CARREGAMENTO - imagens)
 # retorna uma tupla que contém um vetor de imagens soltas e um vetor de imagens de cada paciente para uso na função exibir_imagens
@@ -67,8 +70,11 @@ def carrega_array_mat(caminho):
 
 #=(CARREGAMENTO - .jpg e .png)
 # retorna UMA imagem
-def carrega_imagem_jpg_png(caminho):
-    img_aberta = Image.open(caminho)
+def carrega_imagem_jpg_png():
+    caminho = filedialog.askopenfilenames(title="Selecionar imagens", filetypes=[("Imagens ou Dataset", "*.mat;*.jpg;*.png")])
+    if not caminho:
+        return None
+    img_aberta = Image.open(caminho[0])
     if img_aberta.mode != 'L':  # se imagem estiver em RGB, converte para tons de cinza
         img_aberta = img_aberta.convert('L')
     img_aberta = np.array(img_aberta, dtype=np.uint8).tolist()
@@ -90,7 +96,7 @@ def salva_vetor_pacientes(vetor_caminhos, vetor_pacientes):
 
         # IMAGENS AVULSAS
         elif caminho.lower().endswith(('.png', '.jpg')):
-            imagem_avulsa = carrega_imagem_jpg_png(caminho)
+            imagem_avulsa = carrega_imagem_jpg_png()
             vetor_pacientes[0].append(imagem_avulsa)
 
 # carrega as imagens já preparadas das rois que foram salvas automaticamente na pasta delimitada e retorna 
@@ -100,7 +106,12 @@ def carrega_rois():
     diretorio = os.listdir('rois')
     for nome_arquivo_imagem in diretorio: # os.listdir é diferente do filedialog.askopenfilenames. ele retorna apenas o nome do arquivo, que tem que ser concatenado com o diretório
         if nome_arquivo_imagem.endswith(('.png', '.jpg')):
-            vetor_rois.append((carrega_imagem_jpg_png(os.path.join('rois', nome_arquivo_imagem)), nome_arquivo_imagem))
+            caminho = os.path.join('rois', nome_arquivo_imagem)
+            img_aberta = Image.open(caminho)
+            if img_aberta.mode != 'L':  # se imagem estiver em RGB, converte para tons de cinza
+                img_aberta = img_aberta.convert('L')
+            img_aberta = np.array(img_aberta, dtype=np.uint8).tolist()
+            vetor_rois.append((img_aberta, nome_arquivo_imagem))
     return vetor_rois
 #=============== FIM PROCESSAMENTO DE IMAGENS ===============#
 
@@ -128,7 +139,8 @@ def plota_janela_classificador(classificador):
     janela_classificador.title("Treino do Classificador")
     janela_classificador.geometry("275x200")
     threading.Thread(target=classificador, args=(janela_classificador,)).start()
-    # classificador(janela_classificador)
+
+
 #=============== FIM FUNÇÕES AUXILIARES ===============#
 
 
@@ -180,7 +192,6 @@ def calculo_hi(roi_figado_img, roi_rim_img):
     print(f"media de tons de cinza figado: {media_tons_cinza_roi_figado}")
     media_tons_cinza_roi_rim = media_histograma(histograma_rim, roi_rim_img)
     print(f"media de tons de cinza rim: {media_tons_cinza_roi_rim}")
-    # print(f"HI: {media_tons_cinza_roi_figado / media_tons_cinza_roi_rim}")
     if media_tons_cinza_roi_rim == 0:
         media_tons_cinza_roi_rim = 0.0000000001 # para não ter divisão por 0
     return media_tons_cinza_roi_figado / media_tons_cinza_roi_rim
@@ -210,16 +221,13 @@ def glcm_biblioteca(imagem):
                                         symmetric=True,
                                         normed=True
                                         )
-    #print("homogeneidade")
     homogeneidades = skimage.feature.graycoprops(glcms, 'homogeneity') # [raio][angulo]
-    #print("energia")
     energias = skimage.feature.graycoprops(glcms, 'energy')
     angulos = len(homogeneidades)
     homogeneidades_tratadas = [sum(homogeneidades[i])/angulos for i in range(angulos)] # faz a media das homogeneidades dos angulos
     energias_tratadas = [sum(energias[i])/angulos for i in range(angulos)]
     # antes: glcms = [i][j][raio][angulo]
     glcms = soma_angulos(glcms) # depois: glcms = [raio][i][j]
-    #print("entropias")
     entropias = calcula_entropias(glcms)
     return (glcms, entropias, homogeneidades_tratadas, energias_tratadas)
 
@@ -246,97 +254,7 @@ def soma_angulos(glcms): # a glcm vem dividida para cada raio e angulo. aqui a g
                 for angulo in range(4):
                     glcms_finais[raio][i][j] += glcms[i][j][raio][angulo]
     return glcms_finais
-        
-# refizemos, desse jeito não deu certo
-###### cada raio vai ser um "anel" em volta do pixel. essa função chama o cálculo das glcms para cada combinação de x e y do raio
-#####def calcula_glcms_radiais(imagem): # NAO TA USANDO MAISS
-#####    if not imagem:
-#####        return None
-#####    raios = (1, 2, 4, 8)
-#####    glcms = []
-#####    for raio in raios:
-#####        glcms_raio = []
-#####        # itera pelas combinações de deslocamentos, adicionando os resultados na lista
-#####        for deslocamento_x in range(-raio, raio + 1):
-#####            for deslocamento_y in range(-raio, raio + 1):
-#####                para_checar = ([],[]) # (x, y)
-#####                # se o valor absoluto do deslocamento for igual ao raio, então o pixel faz parte do anel de raio daquele tamanho
-#####                if abs(deslocamento_y) == raio or abs(deslocamento_x) == raio:
-#####                    # adiciona o pixel
-#####                    para_checar[0].append(deslocamento_x)
-#####                    para_checar[1].append(deslocamento_y)
-#####                    
-#####                # if deslocamento_y == 0 and deslocamento_x == 0: # não checa o pixel com ele mesmo
-#####                #     continue
-#####                # if deslocamento_x == 0: # adiciona o deslocamento à lista dos que vão ser checados
-#####                #     para_checar[0].append(0)
-#####                # else:
-#####                #     para_checar[0].append(deslocamento_x)
-#####                #     para_checar[0].append(-deslocamento_x)
-#####                # if deslocamento_y == 0:
-#####                #     para_checar[1].append(0)
-#####                # else:
-#####                #     para_checar[1].append(deslocamento_y)
-#####                #     para_checar[1].append(-deslocamento_y)
-#####                for x in para_checar[0]: # chama o cálculo para cada deslocamento previamente determinado
-#####                    for y in para_checar[1]:
-#####                        glcms_raio.append(calcula_glcm2(imagem, x, y))
-#####        glcm_final_raio = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz final do raio com tudo 0
-#####        for glcm in glcms_raio:
-#####            for i in range(256):
-#####                for j in range(256):
-#####                    glcm_final_raio[i][j] += glcm[i][j] # soma a coocorrência de cada pixel do anel de deslocamentos a uma matriz consolidada
-#####        glcms.append(glcm_final_raio)
-#####    return glcms
-#####
-
-# refizemos, desse jeito não deu certo
-#########def calcula_glcm(imagem, deltax, deltay):
-#########    matriz_ci = [[0 for _ in range(256)] for _ in range(256)] # inicia a matriz de coocorrência, toda com 0
-#########    for y, linha in enumerate(imagem):
-#########        for x, _ in enumerate(linha):
-#########            if y+deltay < len(imagem) and x+deltax < len(linha) and y+deltay >= 0 and x+deltax >= 0:
-#########                cor1 = imagem[y][x]
-#########                cor2 = imagem[y+deltay][x+deltax]
-#########                matriz_ci[cor1][cor2] += 1
-#########    return matriz_ci
-
-# refizemos, desse jeito não deu certo
-#########def calcula_descritores_haralick(glcm):
-#########    # conversão pra array numpy
-#########    glcm_np = np.array(glcm)
-#########    # homogeneidade
-#########    indices = np.indices(glcm_np.shape) # arrays com indices i e j para cada posição da matriz
-#########    i, j = indices[0], indices[1]
-#########    diferenca_indices = np.abs(i - j) # diferença absoluta entre indices i e j
-#########    denominador = 1 + diferenca_indices # evitar divisão por 0
-#########    matriz_pesos = glcm_np / denominador # divide cada elemento da GLCM pelo denominador correspondente
-#########    homogeneidade = np.sum(matriz_pesos) # somatório final
-#########    # energia
-#########    energia = np.sum(glcm_np ** 2)
-#########    # entropia
-#########    glcm_log = np.where(glcm_np > 0, glcm_np, 1e-10)  # evitar log(0) substituindo 0 por valor muito pequeno
-#########    entropia = -np.sum(glcm_np * np.log2(glcm_log))
-#########    return [homogeneidade, entropia, energia]
-######=============== FIM CÁLCULO DE GLCMs + DESCRITORES DE HARALICK ===============#
-
-
-
-# #=============== CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
-# def calcula_lbps(roi): # retorna um vetor no formato [raio_lbp][descritor][raio_glcm][i][j]
-#     print("lbps")
-#     raios = [1, 2, 4, 8]
-#     num_vizinhos = 8
-#     lbps = []
-#     for raio in raios:
-#         print(f"calculando lbp raio: {raio}")
-#         lbp = skimage.feature.local_binary_pattern(np.array(roi), num_vizinhos, raio, method='uniform')  # cálculo do LBP
-#         lbp = lbp.astype(np.uint8) # conversão de LBP para inteiros (para obter histograma)
-#         print("descritores")
-#         descritores_lbp = glcm_biblioteca(lbp)
-#         lbps.append(descritores_lbp)
-#     return lbps
-# #=============== FIM CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
+ 
 
 
 #=============== CÁLCULO DO LOCAL BINARY PATTERN (LBP) ===============#
@@ -475,27 +393,42 @@ def gerar_planilha_classificador():
                           lbp[0][3][3]
                         ])
 
-
-    # se arquivo existe, carrega dados existentes
-    # if existe_arquivo:
-    #     with open(arquivo_csv, mode='r', newline='') as arquivo:
-    #         leitor_csv = csv.reader(arquivo)
-    #         dados_csv = list(leitor_csv)
-
-    # classe do paciente
-    # classe_paciente = None
-    # if idx_paciente <= 16: # 0 = saudável
-    #     classe_paciente = "0"
-    # else: # 1 = doente
-    #     classe_paciente = "1"
-
     # reescrita/atualização do CSV
-    #### dados_csv.append([nome_arquivo, classe_paciente, energia, entropia])
     with open(arquivo_csv, mode='w', newline='') as arquivo:
         escritor_csv = csv.writer(arquivo)
         escritor_csv.writerows(dados_csv)
         tk.messagebox.showinfo("Resultado", "Dados salvos no CSV corretamente.")
 #=============== FIM .CSV PARA USO NO CLASSIFICADOR ===============#
+
+
+
+#=============== GRÁFICOS PARA MOBILENET ===============#
+def graficos_mobilenet(vetor_acuracia, vetor_acuracia_val):
+    numero_epocas = range(len(vetor_acuracia))
+
+    plt.figure(figsize=(14, 6))
+
+    # gráfico - treino
+    plt.subplot(1, 2, 1)
+    plt.plot(numero_epocas, vetor_acuracia, label="Acurácia de Treino", color="black")
+    plt.title("Acurácia de Treino")
+    plt.xlabel("Épocas")
+    plt.ylabel("Acurácia")
+    plt.legend()
+    plt.grid(True)
+
+    # gráfico - validação
+    plt.subplot(1, 2, 2)
+    plt.plot(numero_epocas, vetor_acuracia_val, label="Acurácia de Validação", color="black")
+    plt.title("Acurácia de Validação")
+    plt.xlabel("Épocas")
+    plt.ylabel("Acurácia")
+    plt.legend()
+    plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+#=============== FIM GRÁFICOS PARA MOBILENET ===============#
 
 
 
@@ -721,19 +654,20 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
         imagem = np.array(vetor_pacientes[idx_paciente][idx_imagem])
         if imagem.dtype != np.uint8:
             imagem = (imagem / imagem.max() * 255).astype(np.uint8)
-        idx_paciente_corrigido = idx_paciente - 1 # correção para index começando em 0
-        idx_paciente_formatado = f"{idx_paciente_corrigido:02}" # formatação com 2 dígitos
-        # salva as rois
-        roi_figado_cortada = imagem[roi_figado[1]:roi_figado[3], roi_figado[0]:roi_figado[2]] # [xmin, ymin, xmax, ymax]
-        roi_figado_cortada = ajusta_roi(roi_figado_cortada, hi)
-        roi_figado_imagem = Image.fromarray(roi_figado_cortada)
-        nome_arquivo_roi = f'ROI_{idx_paciente_formatado}_{idx_imagem}.png'
-        roi_figado_imagem.save(f'rois/{nome_arquivo_roi}')
-        # roi_rim_imagem = Image.fromarray(imagem[roi_rim[1]:roi_rim[3], roi_rim[0]:roi_rim[2]])
-        # roi_rim_imagem.save(f'rois/ROI_{idx_paciente_formatado}_{idx_imagem}.png')
-        atualizar_dataset_rois(nome_arquivo_roi, idx_paciente_corrigido, roi_figado, roi_rim, hi)
-        #tk.messagebox.showinfo("Sucesso", "ROI salva com sucesso.")
-        print(f"deu certo {nome_arquivo_roi}")
+        if(idx_paciente > 0):
+            idx_paciente_corrigido = idx_paciente - 1 # correção para index começando em 0
+            idx_paciente_formatado = f"{idx_paciente_corrigido:02}" # formatação com 2 dígitos
+            # salva as rois
+            roi_figado_cortada = imagem[roi_figado[1]:roi_figado[3], roi_figado[0]:roi_figado[2]] # [xmin, ymin, xmax, ymax]
+            roi_figado_cortada = ajusta_roi(roi_figado_cortada, hi)
+            roi_figado_imagem = Image.fromarray(roi_figado_cortada)
+            nome_arquivo_roi = f'ROI_{idx_paciente_formatado}_{idx_imagem}.png'
+            roi_figado_imagem.save(f'rois/{nome_arquivo_roi}')
+            atualizar_dataset_rois(nome_arquivo_roi, idx_paciente_corrigido, roi_figado, roi_rim, hi)
+            tk.messagebox.showinfo("Sucesso", "ROI salva com sucesso.")
+        else:
+            global rois_salva_na_hora
+            rois_salva_na_hora.append([roi_figado, roi_rim, hi])
 
     def navegar_avancar(event):
         nonlocal idx_paciente
@@ -754,6 +688,8 @@ def janela_selecionar_rois(vetor_pacientes, idx_paciente=-1, idx_imagem=-1):
             if len(vetor_pacientes[idx_paciente-1]) != 0:
                 idx_paciente -= 1
                 idx_imagem = len(vetor_pacientes[idx_paciente]) - 1
+            else:
+                idx_imagem = 0
         exibe_figura()
 
     # atualiza a e imagem e os retangulos das rois quando troca de imagem
@@ -942,25 +878,8 @@ def janela_descritores_haralick(vetor_rois=None, idx_roi=0, roi_atual=None, desc
                 texto_descritores += f"Entropia: {entropia}\n\n"
                 # descritores lbp
                 texto_descritores_lbp += f"\n\nRaio {raio}:\n"
-                # entropias = descritores_lbp[0][1]
-                # energias = descritores_lbp[0][3]
                 texto_descritores_lbp += f"Entropia: {descritores_lbp[0][1][idx_raio]}"
-                # for i in entropias:
-                #     texto_descritores_lbp += f"{i:.2f} / "
                 texto_descritores_lbp += f"\nEnergia: {descritores_lbp[0][3][idx_raio]}"
-                # for i in energias:
-                #     texto_descritores_lbp += f"{i:.2f} / "
-            # for idx_raio_lbp in range(len(descritores_lbp)): # descritores_lbp = [raio_lbp][descritor][raio]
-            #     raio_lbp = 2**idx_raio_lbp
-            #     texto_descritores_lbp += f"\n\nRaio {raio_lbp}:\n"
-            #     entropias = descritores_lbp[idx_raio_lbp][1]
-            #     energias = descritores_lbp[idx_raio_lbp][3]
-            #     texto_descritores_lbp += "Entropia: "
-            #     for i in entropias:
-            #         texto_descritores_lbp += f"{i:.2f} / "
-            #     texto_descritores_lbp += "\nEnergia: "
-            #     for i in energias:
-            #         texto_descritores_lbp += f"{i:.2f} / "
             if existe_texto:
                 # se o objeto do texto existir, só renomeia
                 ax.texts[0].set_text(texto_descritores)
@@ -1037,19 +956,19 @@ def roda_xgboost(janela_classificador):
     resultados_xgboost = cross_validation_xgboost(df)
     fim_cronometro = time.time()
     tempo_total_treino = fim_cronometro - inicio_cronometro
+    print(f"\n55 rodadas de testes para cross validation concluídas em {tempo_total_treino:.2f} segundos. Resultados médios:")
+    print(f" - Acurácia        {resultados_xgboost[0]:.2f}")
+    print(f" - Especificidade  {resultados_xgboost[1]:.2f}")
+    print(f" - Sensibilidade   {resultados_xgboost[2]:.2f}")
+    print(f"\nMatriz de Confusão:\n{np.sum(resultados_xgboost[3], axis=0)}")
     label_status['text'] = (
         "Resultados:\n"
         f"Acurácia:        {resultados_xgboost[0]:.2f}\n"
         f"Especificidade:  {resultados_xgboost[1]:.2f}\n"
         f"Sensibilidade:   {resultados_xgboost[2]:.2f}\n"
-        f"Matriz de Confusão:\n{np.sum(resultados_xgboost[3], axis=0)}"
+        f"Matriz de Confusão:\n{np.sum(resultados_xgboost[3], axis=0)}\n"
         f"Tempo total de treino: {tempo_total_treino:.2f} segundos"
     )
-    print("\n55 rodadas de testes para cross validation concluídas. Resultados médios:")
-    print(f" - Acurácia        {resultados_xgboost[0]:.2f}")
-    print(f" - Especificidade  {resultados_xgboost[1]:.2f}")
-    print(f" - Sensibilidade   {resultados_xgboost[2]:.2f}")
-    print(f"\nMatriz de Confusão:\n{np.sum(resultados_xgboost[3], axis=0)}")
 
 
 # faz a cross validation, rotacionando pacientes como o conjunto teste, e roda o classificador raso xgboost
@@ -1138,17 +1057,12 @@ def roda_mobilenet(janela_classificador):
     def prepara_treino_teste(paciente_teste):
         nonlocal X_teste, y_teste, X_treino, y_treino
         str_paciente = ""
-        # print(f"paciente {paciente_teste}")
         if paciente_teste < 10:
             str_paciente = "0" + str(int(paciente_teste))
         else:
             str_paciente = str(int(paciente_teste))
-        # print(f"str paciente {str_paciente}")
         df_teste = df[df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
-        # print(f"dfteste {df_teste}")
         df_treino = df[~df['nome_arquivo'].str.startswith(f'ROI_{str_paciente}_')]
-        # print(f"dftreino {df_treino}")
-        # input()
 
         # pega a imagem do dicionario de rois e roda ela pelo preprocessamento, depois salva no X.
         X_teste = np.array([ preprocessamento_mobilenet( dicionario_rois[ row['nome_arquivo']]) for _, row in df_teste.iterrows()])
@@ -1204,12 +1118,6 @@ def roda_mobilenet(janela_classificador):
     tempo_total_treino += tempo_atual_treino
     print(f"Treino levou {tempo_atual_treino:.2f} segundos")
 
-    # imprime resultados
-    # for i, relatorio in enumerate(relatorios):
-    #     print(f"\n\nPaciente {i+1}:\n{relatorio}")
-    #     print(f"Matriz de Confusão:\n{matrizes_confusao[i]}")
-    #     print(f"Histórico de Treino:\n{historicos[i].history}\n\n")
-
     # salva resultados em arquivo
     with open('resultados_mobilenet.txt', 'w') as arquivo_resultados:
         for i, relatorio in enumerate(relatorios):
@@ -1221,6 +1129,24 @@ def roda_mobilenet(janela_classificador):
         f"Tempo total de treino: {tempo_total_treino:.2f} segundos\n"
     )
 
+    # prepara os dados para plotagem do gráfico
+    vetor_acuracia_val = []
+    vetor_acuracia = []
+    for historico in historicos:
+        acuracias_val = historico.history['val_accuracy']
+        acuracias = historico.history['accuracy']
+        for loss in acuracias_val:
+            vetor_acuracia_val.append(loss)
+        for acuracia in acuracias:
+            vetor_acuracia.append(acuracia)
+    graficos_mobilenet(vetor_acuracia, vetor_acuracia_val)
+
+    global modelo
+    modelo = modelo_final
+    global rois_salva_na_hora
+    if(len(rois_salva_na_hora > 0)):
+        resultado = modelo.predict(preprocessamento_mobilenet(rois_salva_na_hora[0][0]))
+        print(f"Resultado da imagem salva na hora: {resultado}")
 
 
 def preprocessamento_mobilenet(imagem_vetor):
@@ -1239,7 +1165,7 @@ def menu_principal():
     # config: janela, resolução, estilização
     root = tk.Tk()
     root.title("PAI-DIagnosticoNAFLD")
-    root.geometry("400x515")
+    root.geometry("400x550")
     style = ttk.Style()
     style.theme_use('clam')
 
@@ -1265,6 +1191,8 @@ def menu_principal():
     btn5.grid(row=5, column=0, padx=10, pady=10, sticky="nsew")
     btn6 = tk.Button(menu_principal, text="Classificador Profundo (MobileNet)", command=lambda:{plota_janela_classificador(roda_mobilenet)}, width=50, height=2)
     btn6.grid(row=6, column=0, padx=10, pady=10, sticky="nsew")
+    #btn7 = tk.Button(menu_principal, text="Carregar Imagem", command=carrega_imagem_jpg_png, width=50, height=2)
+    #btn7.grid(row=6, column=0, padx=10, pady=10, sticky="nsew")
 
     # nomes e matrículas
     pedro = tk.Label(menu_principal, text="Pedro Corrêa Rigotto (762281)", anchor="center")
